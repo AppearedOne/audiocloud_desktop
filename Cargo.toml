@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iced = "0.12.1"
+#iced = "0.12.1"
+iced = { git = "https://github.com/iced-rs/iced/", branch = "master" }
 serde = "1.0.198"
 serde_json = "1.0.116"
 serde_yaml = "0.9.34"

@@ -1,26 +1,27 @@
 use audiocloud_lib::*;
 use iced::font;
 use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, text_input, toggler,
-    Column, Row, Toggler,
+    button, column, container, horizontal_space, row, scrollable, text, text_input,
 };
-use iced::{
-    alignment, executor, Alignment, Application, Command, Element, Length, Padding, Settings, Theme,
-};
-use iced_aw::graphics::icons::*;
-use reqwest::*;
+use iced::{alignment, Alignment, Command, Element, Font, Length, Padding, Theme};
+use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 
+pub mod helpers;
 pub mod request;
 
 #[tokio::main]
 async fn main() -> iced::Result {
-    Sampler::run(Settings::default())
+    iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
+        .theme(AudioCloud::theme)
+        .font(BOOTSTRAP_FONT_BYTES)
+        .run()
 }
-
-struct Sampler {
+struct AudioCloud {
     input: String,
     view: ViewControl,
     results: Option<SearchResult>,
+    server_url: String,
+    server_status: Option<bool>,
 }
 
 enum ViewControl {
@@ -33,46 +34,31 @@ enum Message {
     InputChanged(String),
     CreateTask,
     SettingsButtonToggled,
-    FontLoaded,
     SearchResultRecived(SearchResult),
     PlaySample(String),
+    ServerStatusUpdate(bool),
+    ServerUrlSubmited(String),
 }
 
-fn perform_search(params: SearchParams) -> Command<Message> {
-    Command::perform(get_result(params), Message::SearchResultRecived)
+const ICON_FONT: Font = Font::with_name("bootstrap-icons");
+
+fn perform_search(params: SearchParams, path: String) -> Command<Message> {
+    Command::perform(
+        request::get_result(params, path),
+        Message::SearchResultRecived,
+    )
 }
-
-async fn get_result(params: SearchParams) -> SearchResult {
-    let client = Client::new();
-    let response = client
-        .post("http://127.0.0.1:4040/search")
-        .json(&params)
-        .send()
-        .await
-        .expect("Couldnt do reqwest")
-        .text()
-        .await
-        .unwrap();
-
-    let out: SearchResult = serde_json::from_str(&response).expect("Couldnt parse response");
-    out
-}
-impl Application for Sampler {
-    type Message = Message;
-    type Theme = Theme;
-    type Flags = ();
-    type Executor = executor::Default;
-
-    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+impl AudioCloud {
+    fn new() -> (Self, Command<Message>) {
         (
             Self {
                 input: String::from(""),
                 view: ViewControl::Main,
                 results: None,
+                server_url: "http://127.0.0.1:4040/".to_string(),
+                server_status: None,
             },
-            Command::batch(vec![
-                font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(|_| Message::FontLoaded)
-            ]),
+            Command::none(),
         )
     }
 
@@ -84,7 +70,7 @@ impl Application for Sampler {
         match message {
             Message::InputChanged(val) => {
                 self.input = val;
-                if self.input.is_empty() {
+                if self.input.is_empty() || self.input.eq("-") {
                     return Command::none();
                 }
                 let params = SearchParams {
@@ -95,25 +81,40 @@ impl Application for Sampler {
                     pack_id: None,
                     max_results: Some(30),
                 };
-                return perform_search(params);
+                return perform_search(params, self.server_url.clone());
             }
             Message::CreateTask => {}
             Message::SettingsButtonToggled => match self.view {
                 ViewControl::Settings => self.view = ViewControl::Main,
                 ViewControl::Main => self.view = ViewControl::Settings,
             },
-            Message::FontLoaded => {}
-            Message::SearchResultRecived(val) => self.results = Some(val),
-            Message::PlaySample(path) => {}
+            Message::SearchResultRecived(val) => {
+                if val.samples.len() > 0 {
+                    self.results = Some(val)
+                } else {
+                    self.results = None
+                }
+            }
+            Message::PlaySample(_path) => {}
+            Message::ServerUrlSubmited(url) => {
+                self.server_url = url;
+                return Command::perform(
+                    request::check_connection(self.server_url.clone()),
+                    Message::ServerStatusUpdate,
+                );
+            }
+            Message::ServerStatusUpdate(status) => {
+                self.server_status = Some(status);
+            }
         }
         Command::none()
     }
 
-    fn view(&self) -> Element<Self::Message> {
+    fn view(&self) -> Element<Message> {
         match self.view {
             ViewControl::Main => {
                 let settings =
-                    button(text(icon_to_string(BootstrapIcon::GearFill)).font(BOOTSTRAP_FONT))
+                    button(text(icon_to_string(BootstrapIcon::GearFill)).font(ICON_FONT))
                         .on_press(Message::SettingsButtonToggled)
                         .padding([5, 10, 5, 10]);
                 let status_bar = container(row![horizontal_space(), settings]);
@@ -139,18 +140,50 @@ impl Application for Sampler {
                 match &self.results {
                     Some(val) => {
                         for sample in &val.samples {
-                            let name = &sample.name.replace(".wav", "");
-                            let sample_entry = container(row![
-                                button(
-                                    text(icon_to_string(BootstrapIcon::PlayFill))
-                                        .font(BOOTSTRAP_FONT)
-                                        .size(25)
-                                )
-                                .on_press(Message::PlaySample(sample.name.to_string())),
-                                text(name).size(25),
-                                horizontal_space(),
-                            ]);
-                            result_row = result_row.push(sample_entry);
+                            let name = helpers::remove_brackets(&sample.name.replace(".wav", ""));
+
+                            let type_text = match sample.sampletype {
+                                SampleType::OneShot => {
+                                    row![
+                                        text(icon_to_string(BootstrapIcon::Soundwave))
+                                            .font(ICON_FONT),
+                                        text(" OneShot")
+                                    ]
+                                }
+                                SampleType::Loop(tempo) => {
+                                    row![
+                                        text(icon_to_string(BootstrapIcon::ArrowRepeat))
+                                            .font(ICON_FONT),
+                                        text(" Loop "),
+                                        text(tempo.to_string()).size(10),
+                                        text("bpm").size(10)
+                                    ]
+                                }
+                            };
+
+                            let type_label =
+                                container(type_text).align_y(alignment::Vertical::Center);
+
+                            let sample_entry = container(
+                                row![
+                                    button(
+                                        text(icon_to_string(BootstrapIcon::PlayFill))
+                                            .font(ICON_FONT)
+                                            .size(25)
+                                    )
+                                    .style(|_theme, _style| button::Style {
+                                        background: None,
+                                        ..Default::default()
+                                    })
+                                    .padding(20)
+                                    .on_press(Message::PlaySample(sample.name.to_string())),
+                                    column![text(name).size(25), type_label],
+                                    horizontal_space(),
+                                ]
+                                .align_items(Alignment::Center),
+                            );
+                            result_row =
+                                result_row.push(sample_entry.align_y(alignment::Vertical::Center));
                         }
                     }
                     None => {
@@ -159,7 +192,7 @@ impl Application for Sampler {
                     }
                 }
 
-                result_row = result_row;
+                result_row = result_row.spacing(5);
                 let result_scollable = container(scrollable(result_row)).padding(10);
 
                 column![status_bar, title, input, result_scollable]
@@ -168,7 +201,7 @@ impl Application for Sampler {
             }
             ViewControl::Settings => {
                 let settings_button =
-                    button(text(icon_to_string(BootstrapIcon::XLg)).font(BOOTSTRAP_FONT))
+                    button(text(icon_to_string(BootstrapIcon::XLg)).font(ICON_FONT))
                         .on_press(Message::SettingsButtonToggled)
                         .padding([5, 10, 5, 10]);
                 let status_bar = row![horizontal_space(), settings_button];
@@ -178,12 +211,33 @@ impl Application for Sampler {
                     .size(35)
                     .horizontal_alignment(alignment::Horizontal::Center);
 
-                column![status_bar, title].spacing(20).into()
+                let connection_status = match self.server_status {
+                    Some(status) => match status {
+                        true => text("Server connected"),
+                        false => text("Server unreachable"),
+                    },
+                    None => text("Unknown status"),
+                };
+                let settings = column![row![
+                    text("Server URL: "),
+                    text_input("http://127.0.0.1:4040/", &self.server_url)
+                        .on_input(Message::ServerUrlSubmited),
+                    connection_status,
+                ]
+                .align_items(Alignment::Center),];
+
+                column![status_bar, title, settings].spacing(20).into()
             }
         }
     }
 
     fn theme(&self) -> Theme {
         Theme::KanagawaDragon
+    }
+}
+
+impl Default for AudioCloud {
+    fn default() -> Self {
+        Self::new().0
     }
 }
