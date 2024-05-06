@@ -1,9 +1,10 @@
 use audiocloud_lib::*;
-use iced::font;
 use iced::widget::{
     button, column, container, horizontal_space, row, scrollable, text, text_input,
 };
-use iced::{alignment, Alignment, Command, Element, Font, Length, Padding, Theme};
+use iced::{
+    alignment, executor, Alignment, Command, Element, Executor, Font, Length, Padding, Theme,
+};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 
 pub mod helpers;
@@ -171,10 +172,7 @@ impl AudioCloud {
                                             .font(ICON_FONT)
                                             .size(25)
                                     )
-                                    .style(|_theme, _style| button::Style {
-                                        background: None,
-                                        ..Default::default()
-                                    })
+                                    .style(|theme, status| button::text(theme, status))
                                     .padding(20)
                                     .on_press(Message::PlaySample(sample.name.to_string())),
                                     column![text(name).size(25), type_label],
@@ -220,11 +218,22 @@ impl AudioCloud {
                 };
                 let settings = column![row![
                     text("Server URL: "),
-                    text_input("http://127.0.0.1:4040/", &self.server_url)
-                        .on_input(Message::ServerUrlSubmited),
+                    container(
+                        text_input("http://127.0.0.1:4040/", &self.server_url)
+                            .on_input(Message::ServerUrlSubmited)
+                    )
+                    .padding({
+                        Padding {
+                            bottom: 0.0,
+                            top: 0.0,
+                            left: 5.0,
+                            right: 5.0,
+                        }
+                    }),
                     connection_status,
                 ]
-                .align_items(Alignment::Center),];
+                .align_items(Alignment::Center)
+                .padding(20),];
 
                 column![status_bar, title, settings].spacing(20).into()
             }
