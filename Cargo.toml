@@ -17,3 +17,4 @@ tokio = { version = "1.37.0", features = ["full"] }
 anyhow = "1.0.82"
 reqwest = { version = "0.12.4", features = ["json"] }
 rodio = "0.18.0"
+serde_derive = "1.0.200"

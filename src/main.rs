@@ -1,6 +1,7 @@
 use audiocloud_lib::*;
 use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, text_input,
+    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
+    text_input,
 };
 use iced::{
     alignment, executor, Alignment, Command, Element, Executor, Font, Length, Padding, Theme,
@@ -13,15 +14,17 @@ use std::io::BufReader;
 pub mod audio;
 pub mod helpers;
 pub mod request;
+pub mod settings;
+pub mod themes;
 
 #[tokio::main]
 async fn main() -> iced::Result {
     iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(BOOTSTRAP_FONT_BYTES)
-        .load(|| Command::perform(audio::init_audio_unwrap(), Message::AudioInitialized))
         .run()
 }
+
 struct AudioCloud {
     input: String,
     view: ViewControl,
@@ -29,6 +32,11 @@ struct AudioCloud {
     server_url: String,
     server_status: Option<bool>,
     audio_devices: Option<audio::Handlers>,
+    theme_state: combo_box::State<Theme>,
+    selected_theme: Option<Theme>,
+
+    show_oneshots: bool,
+    show_loops: bool,
 }
 
 enum ViewControl {
@@ -47,7 +55,11 @@ enum Message {
 
     PlaySample(String),
     TempAudioLoaded(String),
-    AudioInitialized(audio::Handlers),
+
+    ThemeSelected(Theme),
+
+    ShowOneshotsCheckbox(bool),
+    ShowLoopsCheckbox(bool),
 }
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
@@ -64,7 +76,33 @@ fn send_file_preview_dl(server_url: String, path: String) -> Command<Message> {
         Message::TempAudioLoaded,
     )
 }
+
 impl AudioCloud {
+    fn create_request_command(&self, input: String) -> Command<Message> {
+        if input.is_empty() || input.eq("-") {
+            return Command::none();
+        }
+
+        let sample_type_filter = if self.show_loops == self.show_oneshots {
+            None
+        } else {
+            if self.show_oneshots {
+                Some(SampleType::OneShot)
+            } else {
+                Some(SampleType::Loop(0))
+            }
+        };
+
+        let params = SearchParams {
+            query: input.clone(),
+            sample_type: sample_type_filter,
+            max_tempo: None,
+            min_tempo: None,
+            pack_id: None,
+            max_results: Some(50),
+        };
+        return perform_search(params, self.server_url.clone());
+    }
     fn new() -> (Self, Command<Message>) {
         (
             Self {
@@ -73,7 +111,14 @@ impl AudioCloud {
                 results: None,
                 server_url: "http://127.0.0.1:4040/".to_string(),
                 server_status: None,
-                audio_devices: None,
+                audio_devices: match audio::init_audio() {
+                    Ok(handlers) => Some(handlers),
+                    Err(_) => None,
+                },
+                theme_state: combo_box::State::new(Theme::ALL.to_vec()),
+                selected_theme: None,
+                show_oneshots: true,
+                show_loops: true,
             },
             Command::none(),
         )
@@ -87,18 +132,7 @@ impl AudioCloud {
         match message {
             Message::InputChanged(val) => {
                 self.input = val;
-                if self.input.is_empty() || self.input.eq("-") {
-                    return Command::none();
-                }
-                let params = SearchParams {
-                    query: self.input.clone(),
-                    sample_type: None,
-                    max_tempo: None,
-                    min_tempo: None,
-                    pack_id: None,
-                    max_results: Some(30),
-                };
-                return perform_search(params, self.server_url.clone());
+                return self.create_request_command(self.input.clone());
             }
             Message::CreateTask => {}
             Message::SettingsButtonToggled => match self.view {
@@ -127,10 +161,38 @@ impl AudioCloud {
                 return send_file_preview_dl(self.server_url.clone(), path)
             }
             Message::TempAudioLoaded(path) => {
-                let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-                let file = BufReader::new(File::open(path).unwrap());
-                let source = Decoder::new(file).unwrap();
-                stream_handle.play_raw(source.convert_samples());
+                let file = BufReader::new(File::open(path).expect("Couldnt open file"));
+                let source = Decoder::new(file).expect("Couldnt build source from file");
+                match &self.audio_devices {
+                    Some(devs) => {
+                        if !devs.sink.empty() {
+                            devs.sink.clear();
+                        }
+
+                        devs.sink.append(source);
+                        devs.sink.play();
+                    }
+                    None => println!("Error loading devices from option"),
+                }
+            }
+            Message::ThemeSelected(theme) => {
+                self.selected_theme = Some(theme);
+            }
+            Message::ShowOneshotsCheckbox(val) => {
+                self.show_oneshots = val;
+                if !self.show_loops && !self.show_oneshots {
+                    self.show_loops = true;
+                    self.show_oneshots = true;
+                }
+                return self.create_request_command(self.input.clone());
+            }
+            Message::ShowLoopsCheckbox(val) => {
+                self.show_loops = val;
+                if !self.show_loops && !self.show_oneshots {
+                    self.show_loops = true;
+                    self.show_oneshots = true;
+                }
+                return self.create_request_command(self.input.clone());
             }
         }
         Command::none()
@@ -162,6 +224,17 @@ impl AudioCloud {
                     right: 50.0,
                 });
 
+                let sample_type_selector = row![
+                    checkbox("OneShots ", self.show_oneshots)
+                        .on_toggle(Message::ShowOneshotsCheckbox)
+                        .size(22),
+                    checkbox("Loops", self.show_loops)
+                        .on_toggle(Message::ShowLoopsCheckbox)
+                        .size(22)
+                ];
+                let filters =
+                    container(column![text("Filters").size(25), sample_type_selector]).padding(10);
+
                 let mut result_row = column![];
                 match &self.results {
                     Some(val) => {
@@ -172,17 +245,19 @@ impl AudioCloud {
                                 SampleType::OneShot => {
                                     row![
                                         text(icon_to_string(BootstrapIcon::Soundwave))
-                                            .font(ICON_FONT),
-                                        text(" OneShot")
+                                            .font(ICON_FONT)
+                                            .style(themes::text_fg),
+                                        text(" OneShot").style(themes::text_fg),
                                     ]
                                 }
                                 SampleType::Loop(tempo) => {
                                     row![
                                         text(icon_to_string(BootstrapIcon::ArrowRepeat))
-                                            .font(ICON_FONT),
-                                        text(" Loop "),
-                                        text(tempo.to_string()).size(10),
-                                        text("bpm").size(10)
+                                            .font(ICON_FONT)
+                                            .style(themes::text_fg),
+                                        text(" Loop ").style(themes::text_fg),
+                                        text(tempo.to_string()).style(themes::text_fg).size(10),
+                                        text("bpm").size(10).style(themes::text_fg),
                                     ]
                                 }
                             };
@@ -216,9 +291,13 @@ impl AudioCloud {
                 }
 
                 result_row = result_row.spacing(5);
-                let result_scollable = container(scrollable(result_row)).padding(10);
+                let result_scollable = container(
+                    scrollable(result_row)
+                        .style(|theme, status| themes::scrollbar_invis(theme, status)),
+                )
+                .padding(10);
 
-                column![status_bar, title, input, result_scollable]
+                column![status_bar, title, input, filters, result_scollable]
                     .spacing(20)
                     .into()
             }
@@ -236,29 +315,46 @@ impl AudioCloud {
 
                 let connection_status = match self.server_status {
                     Some(status) => match status {
-                        true => text("Server connected"),
-                        false => text("Server unreachable"),
+                        true => text("Server connected").style(|theme: &Theme| text::Style {
+                            color: Some(theme.palette().success),
+                        }),
+                        false => text("Server unreachable").style(|theme: &Theme| text::Style {
+                            color: Some(theme.palette().danger),
+                        }),
                     },
                     None => text("Unknown status"),
                 };
-                let settings = column![row![
-                    text("Server URL: "),
-                    container(
-                        text_input("http://127.0.0.1:4040/", &self.server_url)
-                            .on_input(Message::ServerUrlSubmited)
-                    )
-                    .padding({
-                        Padding {
-                            bottom: 0.0,
-                            top: 0.0,
-                            left: 5.0,
-                            right: 5.0,
-                        }
-                    }),
-                    connection_status,
-                ]
-                .align_items(Alignment::Center)
-                .padding(20),];
+                let settings = column![
+                    row![
+                        text("Server URL: "),
+                        container(
+                            text_input("http://127.0.0.1:4040/", &self.server_url)
+                                .on_input(Message::ServerUrlSubmited)
+                        )
+                        .padding({
+                            Padding {
+                                bottom: 0.0,
+                                top: 0.0,
+                                left: 5.0,
+                                right: 5.0,
+                            }
+                        }),
+                        connection_status,
+                    ]
+                    .align_items(Alignment::Center)
+                    .padding(20),
+                    row![
+                        text("Theme: "),
+                        combo_box(
+                            &self.theme_state,
+                            "No theme selected",
+                            self.selected_theme.as_ref(),
+                            Message::ThemeSelected
+                        )
+                    ]
+                    .align_items(Alignment::Center)
+                    .padding(20),
+                ];
 
                 column![status_bar, title, settings].spacing(20).into()
             }
@@ -266,7 +362,10 @@ impl AudioCloud {
     }
 
     fn theme(&self) -> Theme {
-        Theme::KanagawaDragon
+        match &self.selected_theme {
+            Some(theme) => theme.clone(),
+            None => Theme::KanagawaDragon,
+        }
     }
 }
 

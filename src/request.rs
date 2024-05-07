@@ -34,13 +34,14 @@ pub async fn get_result(params: SearchParams, path: String) -> SearchResult {
 pub async fn get_temp_audio(server_url: String, file_path: String) -> String {
     let tempaudio_path = "Tempaudio.wav";
     let client = Client::new();
-    let url = server_url + "samples/" + &file_path;
+    let file_path_web = file_path.replace("#", "%23").replace(" ", "%20");
+    let url = server_url + "samples/" + &file_path_web;
     let response = client
         .get(url)
         .send()
         .await
         .expect("Couldnt send file get request");
     let body = response.bytes().await.expect("body invalid");
-    std::fs::write(tempaudio_path, &body);
+    let _ = std::fs::write(tempaudio_path, &body);
     String::from(tempaudio_path)
 }

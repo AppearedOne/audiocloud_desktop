@@ -1,7 +1,5 @@
 use anyhow::Result;
 use rodio::{source::Source, Decoder, OutputStream, OutputStreamHandle, Sink};
-use std::fs::File;
-use std::io::BufReader;
 
 pub async fn play_audio() -> Result<(), anyhow::Error> {
     Ok(())
