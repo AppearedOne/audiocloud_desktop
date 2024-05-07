@@ -6,7 +6,11 @@ use iced::{
     alignment, executor, Alignment, Command, Element, Executor, Font, Length, Padding, Theme,
 };
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
+use rodio::{source::Source, Decoder, OutputStream};
+use std::fs::File;
+use std::io::BufReader;
 
+pub mod audio;
 pub mod helpers;
 pub mod request;
 
@@ -15,6 +19,7 @@ async fn main() -> iced::Result {
     iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(BOOTSTRAP_FONT_BYTES)
+        .load(|| Command::perform(audio::init_audio_unwrap(), Message::AudioInitialized))
         .run()
 }
 struct AudioCloud {
@@ -23,6 +28,7 @@ struct AudioCloud {
     results: Option<SearchResult>,
     server_url: String,
     server_status: Option<bool>,
+    audio_devices: Option<audio::Handlers>,
 }
 
 enum ViewControl {
@@ -36,9 +42,12 @@ enum Message {
     CreateTask,
     SettingsButtonToggled,
     SearchResultRecived(SearchResult),
-    PlaySample(String),
     ServerStatusUpdate(bool),
     ServerUrlSubmited(String),
+
+    PlaySample(String),
+    TempAudioLoaded(String),
+    AudioInitialized(audio::Handlers),
 }
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
@@ -47,6 +56,12 @@ fn perform_search(params: SearchParams, path: String) -> Command<Message> {
     Command::perform(
         request::get_result(params, path),
         Message::SearchResultRecived,
+    )
+}
+fn send_file_preview_dl(server_url: String, path: String) -> Command<Message> {
+    Command::perform(
+        request::get_temp_audio(server_url, path),
+        Message::TempAudioLoaded,
     )
 }
 impl AudioCloud {
@@ -58,6 +73,7 @@ impl AudioCloud {
                 results: None,
                 server_url: "http://127.0.0.1:4040/".to_string(),
                 server_status: None,
+                audio_devices: None,
             },
             Command::none(),
         )
@@ -96,7 +112,6 @@ impl AudioCloud {
                     self.results = None
                 }
             }
-            Message::PlaySample(_path) => {}
             Message::ServerUrlSubmited(url) => {
                 self.server_url = url;
                 return Command::perform(
@@ -106,6 +121,16 @@ impl AudioCloud {
             }
             Message::ServerStatusUpdate(status) => {
                 self.server_status = Some(status);
+            }
+
+            Message::PlaySample(path) => {
+                return send_file_preview_dl(self.server_url.clone(), path)
+            }
+            Message::TempAudioLoaded(path) => {
+                let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+                let file = BufReader::new(File::open(path).unwrap());
+                let source = Decoder::new(file).unwrap();
+                stream_handle.play_raw(source.convert_samples());
             }
         }
         Command::none()
@@ -174,7 +199,7 @@ impl AudioCloud {
                                     )
                                     .style(|theme, status| button::text(theme, status))
                                     .padding(20)
-                                    .on_press(Message::PlaySample(sample.name.to_string())),
+                                    .on_press(Message::PlaySample(sample.path.to_string())),
                                     column![text(name).size(25), type_label],
                                     horizontal_space(),
                                 ]
