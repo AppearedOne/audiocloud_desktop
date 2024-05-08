@@ -4,10 +4,10 @@ use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
     text_input,
 };
-use iced::window;
 use iced::{
     alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
 };
+use iced::{overlay, window};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use rodio::{source::Source, Decoder, OutputStream};
 use std::fs::File;
@@ -47,6 +47,8 @@ pub struct AudioCloud {
 
     show_oneshots: bool,
     show_loops: bool,
+    show_only_favourites: bool,
+    show_all_favourites: bool,
 
     settings: settings::Settings,
     status_message: String,
@@ -76,6 +78,8 @@ pub enum Message {
 
     ShowOneshotsCheckbox(bool),
     ShowLoopsCheckbox(bool),
+    ShowOnlyFavouritesToggled(bool),
+    ShowAllFavourites,
 
     MaxRequestsChanged(i32),
 
@@ -143,6 +147,8 @@ impl AudioCloud {
                 selected_theme: None,
                 show_oneshots: true,
                 show_loops: true,
+                show_only_favourites: false,
+                show_all_favourites: false,
 
                 settings: settings::Settings {
                     max_results: 50,
@@ -167,7 +173,7 @@ impl AudioCloud {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::EventOccurred(event) => {
-                if let Event::Window(id, window::Event::CloseRequested) = event {
+                if let Event::Window(_id, window::Event::CloseRequested) = event {
                     let mut set = self.settings.clone();
                     match &self.selected_theme {
                         Some(theme) => set.theme = theme.to_string(),
@@ -245,6 +251,12 @@ impl AudioCloud {
                 self.show_loops = val;
                 return self.create_request_command(self.input.clone());
             }
+            Message::ShowOnlyFavouritesToggled(val) => {
+                self.show_only_favourites = val;
+            }
+            Message::ShowAllFavourites => {
+                self.show_all_favourites = !self.show_all_favourites;
+            }
             Message::LoadSettings => {
                 return Command::perform(
                     settings::load_from_file("settings.json"),
@@ -314,21 +326,62 @@ impl AudioCloud {
                     right: 50.0,
                 });
 
+                let fav_all_text = match self.show_all_favourites {
+                    true => text(icon_to_string(BootstrapIcon::StarFill)).style(|theme: &Theme| {
+                        text::Style {
+                            color: Some(theme.palette().success),
+                        }
+                    }),
+                    false => text(icon_to_string(BootstrapIcon::StarFill)),
+                };
+
+                let tempo_filter_button = button(text("Tempo"));
+
                 let sample_type_selector = row![
-                    checkbox("OneShots ", self.show_oneshots)
+                    checkbox("OneShots", self.show_oneshots)
                         .on_toggle(Message::ShowOneshotsCheckbox)
                         .size(22),
                     checkbox("Loops", self.show_loops)
                         .on_toggle(Message::ShowLoopsCheckbox)
+                        .size(22),
+                    checkbox("Favourites", self.show_only_favourites)
+                        .on_toggle(Message::ShowOnlyFavouritesToggled)
                         .size(22)
-                ];
-                let filters =
-                    container(column![text("Filters").size(25), sample_type_selector]).padding(10);
+                        .style(checkbox::success),
+                    tempo_filter_button,
+                    horizontal_space(),
+                    button(fav_all_text.font(ICON_FONT).size(22))
+                        .style(button::text)
+                        .on_press(Message::ShowAllFavourites)
+                ]
+                .align_items(Alignment::Center)
+                .padding(Padding {
+                    top: 0.0,
+                    right: 20.0,
+                    bottom: 0.0,
+                    left: 20.0,
+                })
+                .spacing(15);
+
+                let filter_label = container(text("Filters").size(22)).padding(Padding {
+                    top: 0.0,
+                    right: 20.0,
+                    bottom: 0.0,
+                    left: 20.0,
+                });
+                let filters = container(column![filter_label, sample_type_selector]).padding(10);
 
                 let mut result_row = column![];
                 match &self.results {
                     Some(val) => {
-                        for sample in &val.samples {
+                        let samples = match self.show_all_favourites {
+                            true => &self.settings.favourite_samples,
+                            false => &val.samples,
+                        };
+                        for sample in samples {
+                            if self.show_only_favourites && !self.settings.is_favourite(sample) {
+                                continue;
+                            }
                             let name = helpers::remove_brackets(&sample.name.replace(".wav", ""));
 
                             let type_text = match sample.sampletype {
