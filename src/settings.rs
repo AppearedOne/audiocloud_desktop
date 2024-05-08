@@ -4,12 +4,15 @@ use serde_derive::*;
 use std::fs;
 use std::path::Path;
 
+use crate::helpers::{self, hash_sample};
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Settings {
     pub theme: String,
     pub server_url: String,
     pub max_results: i32,
     pub favourite_samples: Vec<Sample>,
+    pub dl_samples_hash: Vec<String>,
 }
 pub async fn load_from_file(path: &str) -> Settings {
     if !Path::new(path).exists() {
@@ -18,6 +21,7 @@ pub async fn load_from_file(path: &str) -> Settings {
             server_url: "http://127.0.0.1:4040/".to_string(),
             theme: Theme::Dark.to_string(),
             favourite_samples: vec![],
+            dl_samples_hash: vec![],
         };
     }
     let filecontent = fs::read_to_string(path).expect("Couldn't read file");
@@ -49,5 +53,17 @@ impl Settings {
                 break;
             }
         }
+    }
+    pub fn is_downloaded(&self, path: &str) -> bool {
+        for entry in &self.dl_samples_hash {
+            if entry == &hash_sample(&path.replace(".wav", "")) {
+                return true;
+            }
+        }
+        false
+    }
+    pub fn add_dl_entry(&mut self, path: &str) {
+        self.dl_samples_hash.push(helpers::hash_sample(path));
+        println!("added dl entry: {}", helpers::hash_sample(path));
     }
 }

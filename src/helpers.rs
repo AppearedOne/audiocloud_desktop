@@ -1,3 +1,4 @@
+use xxhash_rust::xxh3::xxh3_64;
 pub fn remove_brackets(input: &str) -> String {
     let mut result = String::new();
     let mut inside_brackets = false;
@@ -13,4 +14,8 @@ pub fn remove_brackets(input: &str) -> String {
     }
 
     result
+}
+
+pub fn hash_sample(path: &str) -> String {
+    xxh3_64(path.replace(".wav", "").as_bytes()).to_string()
 }

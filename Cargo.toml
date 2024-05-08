@@ -18,3 +18,5 @@ anyhow = "1.0.82"
 reqwest = { version = "0.12.4", features = ["json"] }
 rodio = "0.18.0"
 serde_derive = "1.0.200"
+xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
+clipboard-rs = "0.1.7"

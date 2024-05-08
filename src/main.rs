@@ -1,5 +1,8 @@
 use audiocloud_lib::*;
+use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
+use helpers::hash_sample;
 use iced::event::{self, Event};
+use iced::widget::shader::wgpu::WindowHandle;
 use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
     text_input,
@@ -10,8 +13,9 @@ use iced::{
 use iced::{overlay, window};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use rodio::{source::Source, Decoder, OutputStream};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
+use std::path::*;
 
 pub mod audio;
 pub mod helpers;
@@ -63,6 +67,9 @@ enum ViewControl {
 pub enum Message {
     EventOccurred(Event),
     Exit(()),
+    RecivedHandle,
+
+    DragSample(String),
 
     InputChanged(String),
     CreateTask,
@@ -73,6 +80,8 @@ pub enum Message {
 
     PlaySample(String),
     TempAudioLoaded(String),
+    DownloadSample(String),
+    SampleAudioDownloaded(String),
 
     ThemeSelected(Theme),
 
@@ -105,7 +114,12 @@ fn send_file_preview_dl(server_url: String, path: String) -> Command<Message> {
         Message::TempAudioLoaded,
     )
 }
-
+fn send_file_dl(server_url: String, path: String) -> Command<Message> {
+    Command::perform(
+        request::dl_sample(server_url, path),
+        Message::SampleAudioDownloaded,
+    )
+}
 impl AudioCloud {
     fn create_request_command(&self, input: String) -> Command<Message> {
         if input.is_empty() || input.eq("-") {
@@ -155,6 +169,7 @@ impl AudioCloud {
                     server_url: "http://127.0.0.1:4040/".to_string(),
                     theme: "Dark".to_string(),
                     favourite_samples: vec![],
+                    dl_samples_hash: vec![],
                 },
                 status_message: String::from("idle... "),
             },
@@ -192,6 +207,7 @@ impl AudioCloud {
                 println!("exiting");
                 return window::close(window::Id::MAIN);
             }
+            Message::RecivedHandle => {}
             Message::InputChanged(val) => {
                 self.input = val;
                 return self.create_request_command(self.input.clone());
@@ -292,6 +308,24 @@ impl AudioCloud {
             }
             Message::MaxRequestsChanged(val) => {
                 self.settings.max_results = val;
+            }
+            Message::DownloadSample(path) => {
+                return send_file_dl(self.settings.server_url.clone(), path)
+            }
+            Message::SampleAudioDownloaded(path) => {
+                self.settings.add_dl_entry(&path);
+                self.status_message = "Downloaded sample ".to_string();
+            }
+            Message::DragSample(path) => {
+                let rel_str = String::from("cached/".to_string() + &hash_sample(&path) + ".wav");
+                let relative_path = Path::new(&rel_str);
+                let mut absolute_path = std::env::current_dir().unwrap();
+                absolute_path.push(relative_path);
+                let abs_str: String = absolute_path.to_str().unwrap().to_string();
+                let filepath = vec![abs_str];
+                println!("trying");
+                let ctx = ClipboardContext::new().unwrap();
+                ctx.set_files(filepath).unwrap();
             }
         }
         Command::none()
@@ -424,6 +458,27 @@ impl AudioCloud {
                                 .style(button::text)
                                 .on_press(Message::ToggleFavourite(sample.clone()));
 
+                            let dl_text = match self.settings.is_downloaded(&sample.path) {
+                                false => text(icon_to_string(BootstrapIcon::Download)).style(
+                                    |theme: &Theme| text::Style {
+                                        color: Some(theme.extended_palette().primary.strong.color),
+                                    },
+                                ),
+                                true => text(icon_to_string(BootstrapIcon::BoxArrowUpRight)).style(
+                                    |theme: &Theme| text::Style {
+                                        color: Some(theme.palette().success),
+                                    },
+                                ),
+                            };
+                            let dl_button = match self.settings.is_downloaded(&sample.path) {
+                                false => button(dl_text.font(ICON_FONT).size(20))
+                                    .style(button::text)
+                                    .on_press(Message::DownloadSample(sample.path.clone())),
+                                true => button(dl_text.font(ICON_FONT).size(20))
+                                    .style(button::text)
+                                    .on_press(Message::DragSample(sample.path.clone())),
+                            };
+
                             let sample_entry = container(
                                 row![
                                     button(
@@ -436,6 +491,7 @@ impl AudioCloud {
                                     .on_press(Message::PlaySample(sample.path.to_string())),
                                     column![text(name).size(25), type_label],
                                     horizontal_space(),
+                                    dl_button,
                                     fav_button,
                                     edit_button,
                                 ]
