@@ -1,7 +1,7 @@
 use audiocloud_lib::*;
 use iced::widget::{
-    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
-    text_input,
+    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, slider,
+    text, text_input,
 };
 use iced::{alignment, Alignment, Element, Length, Padding, Theme};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon};
@@ -37,9 +37,9 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
     };
     let settings = column![
         row![
-            text("Server URL: "),
+            text("Server URL:"),
             container(
-                text_input("http://127.0.0.1:4040/", &app.server_url)
+                text_input("http://127.0.0.1:4040/", &app.settings.server_url)
                     .on_input(Message::ServerUrlSubmited)
             )
             .padding({
@@ -53,9 +53,10 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
             connection_status,
         ]
         .align_items(Alignment::Center)
-        .padding(20),
+        .padding(20)
+        .spacing(15),
         row![
-            text("Theme: "),
+            text("Theme:"),
             combo_box(
                 &app.theme_state,
                 "No theme selected",
@@ -64,6 +65,19 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
             )
         ]
         .align_items(Alignment::Center)
+        .padding(20)
+        .spacing(15),
+        row![
+            text("Max search results:"),
+            text(app.settings.max_results),
+            slider(
+                std::ops::RangeInclusive::new(1, 100),
+                app.settings.max_results,
+                Message::MaxRequestsChanged
+            )
+        ]
+        .align_items(Alignment::Center)
+        .spacing(15)
         .padding(20),
         row![
             button(text("Save settings"))
@@ -72,7 +86,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
             button(text("Reset settings")).style(button::danger),
             button(text("Reload settings")).on_press(Message::LoadSettings)
         ]
-        .spacing(10)
+        .spacing(15)
         .align_items(Alignment::Center)
         .padding(20),
     ];

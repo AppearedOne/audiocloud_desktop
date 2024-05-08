@@ -8,6 +8,7 @@ use std::path::Path;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Settings {
     pub theme: String,
+    pub server_url: String,
     pub max_results: i32,
     pub favourite_samples: Vec<Sample>,
 }
@@ -15,6 +16,7 @@ pub async fn load_from_file(path: &str) -> Settings {
     if !Path::new(path).exists() {
         return Settings {
             max_results: 50,
+            server_url: "http://127.0.0.1:4040/".to_string(),
             theme: Theme::Dark.to_string(),
             favourite_samples: vec![],
         };

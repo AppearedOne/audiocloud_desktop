@@ -40,7 +40,6 @@ pub struct AudioCloud {
     input: String,
     view: ViewControl,
     results: Option<SearchResult>,
-    server_url: String,
     server_status: Option<bool>,
     audio_devices: Option<audio::Handlers>,
     theme_state: combo_box::State<Theme>,
@@ -77,6 +76,8 @@ pub enum Message {
 
     ShowOneshotsCheckbox(bool),
     ShowLoopsCheckbox(bool),
+
+    MaxRequestsChanged(i32),
 
     LoadSettings,
     SaveSettings,
@@ -125,7 +126,7 @@ impl AudioCloud {
             pack_id: None,
             max_results: Some(self.settings.max_results),
         };
-        return perform_search(params, self.server_url.clone());
+        return perform_search(params, self.settings.server_url.clone());
     }
     fn new() -> (Self, Command<Message>) {
         (
@@ -133,7 +134,6 @@ impl AudioCloud {
                 input: String::from(""),
                 view: ViewControl::Main,
                 results: None,
-                server_url: "http://127.0.0.1:4040/".to_string(),
                 server_status: None,
                 audio_devices: match audio::init_audio() {
                     Ok(handlers) => Some(handlers),
@@ -146,6 +146,7 @@ impl AudioCloud {
 
                 settings: settings::Settings {
                     max_results: 50,
+                    server_url: "http://127.0.0.1:4040/".to_string(),
                     theme: "Dark".to_string(),
                     favourite_samples: vec![],
                 },
@@ -173,7 +174,6 @@ impl AudioCloud {
                         None => set.theme = "Dark".to_string(),
                     }
 
-                    println!("sending saving instructions");
                     return Command::perform(
                         settings::save_to_file(set, "settings.json"),
                         Message::Exit,
@@ -203,9 +203,12 @@ impl AudioCloud {
                 }
             }
             Message::ServerUrlSubmited(url) => {
-                self.server_url = url;
+                self.settings.server_url = url;
+                if !self.settings.server_url.ends_with("/") {
+                    self.settings.server_url.push('/');
+                }
                 return Command::perform(
-                    request::check_connection(self.server_url.clone()),
+                    request::check_connection(self.settings.server_url.clone()),
                     Message::ServerStatusUpdate,
                 );
             }
@@ -214,7 +217,7 @@ impl AudioCloud {
             }
 
             Message::PlaySample(path) => {
-                return send_file_preview_dl(self.server_url.clone(), path)
+                return send_file_preview_dl(self.settings.server_url.clone(), path)
             }
             Message::TempAudioLoaded(path) => {
                 let file = BufReader::new(File::open(path).expect("Couldnt open file"));
@@ -274,6 +277,9 @@ impl AudioCloud {
                 } else {
                     self.settings.add_favourite(sample);
                 }
+            }
+            Message::MaxRequestsChanged(val) => {
+                self.settings.max_results = val;
             }
         }
         Command::none()

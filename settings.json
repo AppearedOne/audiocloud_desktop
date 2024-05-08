@@ -1,5 +1,14 @@
 {
-  "theme": "Light",
+  "theme": "Kanagawa Dragon",
+  "server_url": "http://127.0.0.1:4040/",
   "max_results": 50,
-  "favourite_samples": []
+  "favourite_samples": [
+    {
+      "path": "Testlib/Platinum Loops/Construction/Guitar James Kit/Full[102] Am Guitar Jams.wav",
+      "name": "Full[102] Am Guitar Jams.wav",
+      "sampletype": {
+        "Loop": 102
+      }
+    }
+  ]
 }
