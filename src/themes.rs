@@ -1,5 +1,6 @@
 use std::any;
 
+use iced::border::Radius;
 use iced::widget::{
     button, column, container, horizontal_space, row, scrollable, scrollable::*, text, text_input,
     Scrollable,
@@ -98,4 +99,11 @@ pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
             }
         }
     }
+}
+
+pub fn round_button(theme: &Theme, status: iced::widget::button::Status) -> button::Style {
+    let mut style = button::primary(theme, status);
+    let radius = 10.0;
+    style.border.radius = Radius::from([radius, radius, radius, radius]);
+    style
 }

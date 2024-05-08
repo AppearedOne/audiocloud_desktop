@@ -1,10 +1,12 @@
 use audiocloud_lib::*;
+use iced::event::{self, Event};
 use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
     text_input,
 };
+use iced::window;
 use iced::{
-    alignment, executor, Alignment, Command, Element, Executor, Font, Length, Padding, Theme,
+    alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
 };
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use rodio::{source::Source, Decoder, OutputStream};
@@ -16,16 +18,25 @@ pub mod helpers;
 pub mod request;
 pub mod settings;
 pub mod themes;
+pub mod views;
 
 #[tokio::main]
 async fn main() -> iced::Result {
     iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(BOOTSTRAP_FONT_BYTES)
+        .subscription(AudioCloud::subscription)
+        .load(|| {
+            Command::perform(
+                settings::load_from_file("settings.json"),
+                Message::SettingsLoaded,
+            )
+        })
+        .exit_on_close_request(false)
         .run()
 }
 
-struct AudioCloud {
+pub struct AudioCloud {
     input: String,
     view: ViewControl,
     results: Option<SearchResult>,
@@ -37,6 +48,9 @@ struct AudioCloud {
 
     show_oneshots: bool,
     show_loops: bool,
+
+    settings: settings::Settings,
+    status_message: String,
 }
 
 enum ViewControl {
@@ -45,7 +59,10 @@ enum ViewControl {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
+    EventOccurred(Event),
+    Exit(()),
+
     InputChanged(String),
     CreateTask,
     SettingsButtonToggled,
@@ -60,6 +77,13 @@ enum Message {
 
     ShowOneshotsCheckbox(bool),
     ShowLoopsCheckbox(bool),
+
+    LoadSettings,
+    SaveSettings,
+    SettingsLoaded(settings::Settings),
+    SettingsSaved(()),
+
+    ToggleFavourite(Sample),
 }
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
@@ -99,7 +123,7 @@ impl AudioCloud {
             max_tempo: None,
             min_tempo: None,
             pack_id: None,
-            max_results: Some(50),
+            max_results: Some(self.settings.max_results),
         };
         return perform_search(params, self.server_url.clone());
     }
@@ -119,6 +143,13 @@ impl AudioCloud {
                 selected_theme: None,
                 show_oneshots: true,
                 show_loops: true,
+
+                settings: settings::Settings {
+                    max_results: 50,
+                    theme: "Dark".to_string(),
+                    favourite_samples: vec![],
+                },
+                status_message: String::from("idle... "),
             },
             Command::none(),
         )
@@ -128,8 +159,33 @@ impl AudioCloud {
         String::from("Audiocloud")
     }
 
+    fn subscription(&self) -> Subscription<Message> {
+        event::listen().map(Message::EventOccurred)
+    }
+
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::EventOccurred(event) => {
+                if let Event::Window(id, window::Event::CloseRequested) = event {
+                    let mut set = self.settings.clone();
+                    match &self.selected_theme {
+                        Some(theme) => set.theme = theme.to_string(),
+                        None => set.theme = "Dark".to_string(),
+                    }
+
+                    println!("sending saving instructions");
+                    return Command::perform(
+                        settings::save_to_file(set, "settings.json"),
+                        Message::Exit,
+                    );
+                } else {
+                    return Command::none();
+                }
+            }
+            Message::Exit(_) => {
+                println!("exiting");
+                return window::close(window::Id::MAIN);
+            }
             Message::InputChanged(val) => {
                 self.input = val;
                 return self.create_request_command(self.input.clone());
@@ -180,32 +236,60 @@ impl AudioCloud {
             }
             Message::ShowOneshotsCheckbox(val) => {
                 self.show_oneshots = val;
-                if !self.show_loops && !self.show_oneshots {
-                    self.show_loops = true;
-                    self.show_oneshots = true;
-                }
                 return self.create_request_command(self.input.clone());
             }
             Message::ShowLoopsCheckbox(val) => {
                 self.show_loops = val;
-                if !self.show_loops && !self.show_oneshots {
-                    self.show_loops = true;
-                    self.show_oneshots = true;
-                }
                 return self.create_request_command(self.input.clone());
+            }
+            Message::LoadSettings => {
+                return Command::perform(
+                    settings::load_from_file("settings.json"),
+                    Message::SettingsLoaded,
+                )
+            }
+            Message::SettingsLoaded(val) => {
+                self.settings = val;
+                self.selected_theme = themes::string_to_theme(&self.settings.clone().theme);
+                self.status_message = "Loaded settings ".to_string();
+            }
+            Message::SaveSettings => {
+                let mut set = self.settings.clone();
+                match &self.selected_theme {
+                    Some(theme) => set.theme = theme.to_string(),
+                    None => set.theme = "Dark".to_string(),
+                }
+
+                return Command::perform(
+                    settings::save_to_file(set, "settings.json"),
+                    Message::SettingsSaved,
+                );
+            }
+            Message::SettingsSaved(_) => {
+                self.status_message = String::from("Settings saved ");
+            }
+            Message::ToggleFavourite(sample) => {
+                if self.settings.is_favourite(&sample) {
+                    self.settings.rem_favourite(&sample.path);
+                } else {
+                    self.settings.add_favourite(sample);
+                }
             }
         }
         Command::none()
     }
 
     fn view(&self) -> Element<Message> {
+        let status_text = text(&self.status_message).style(themes::text_fg);
         match self.view {
             ViewControl::Main => {
                 let settings =
                     button(text(icon_to_string(BootstrapIcon::GearFill)).font(ICON_FONT))
                         .on_press(Message::SettingsButtonToggled)
                         .padding([5, 10, 5, 10]);
-                let status_bar = container(row![horizontal_space(), settings]);
+                let status_bar = container(
+                    row![horizontal_space(), status_text, settings].align_items(Alignment::Center),
+                );
 
                 let title = text("Audiocloud")
                     .width(Length::Fill)
@@ -265,6 +349,22 @@ impl AudioCloud {
                             let type_label =
                                 container(type_text).align_y(alignment::Vertical::Center);
 
+                            let edit_text = icon_to_string(BootstrapIcon::VinylFill);
+                            let edit_button = button(text(edit_text).size(20).font(ICON_FONT))
+                                .style(button::text);
+
+                            let fav_text = match self.settings.is_favourite(sample) {
+                                true => text(icon_to_string(BootstrapIcon::StarFill)).style(
+                                    |theme: &Theme| text::Style {
+                                        color: Some(theme.palette().success),
+                                    },
+                                ),
+                                false => text(icon_to_string(BootstrapIcon::Star)),
+                            };
+                            let fav_button = button(fav_text.font(ICON_FONT).size(20))
+                                .style(button::text)
+                                .on_press(Message::ToggleFavourite(sample.clone()));
+
                             let sample_entry = container(
                                 row![
                                     button(
@@ -277,6 +377,8 @@ impl AudioCloud {
                                     .on_press(Message::PlaySample(sample.path.to_string())),
                                     column![text(name).size(25), type_label],
                                     horizontal_space(),
+                                    fav_button,
+                                    edit_button,
                                 ]
                                 .align_items(Alignment::Center),
                             );
@@ -301,63 +403,7 @@ impl AudioCloud {
                     .spacing(20)
                     .into()
             }
-            ViewControl::Settings => {
-                let settings_button =
-                    button(text(icon_to_string(BootstrapIcon::XLg)).font(ICON_FONT))
-                        .on_press(Message::SettingsButtonToggled)
-                        .padding([5, 10, 5, 10]);
-                let status_bar = row![horizontal_space(), settings_button];
-
-                let title = text("Settings")
-                    .width(Length::Fill)
-                    .size(35)
-                    .horizontal_alignment(alignment::Horizontal::Center);
-
-                let connection_status = match self.server_status {
-                    Some(status) => match status {
-                        true => text("Server connected").style(|theme: &Theme| text::Style {
-                            color: Some(theme.palette().success),
-                        }),
-                        false => text("Server unreachable").style(|theme: &Theme| text::Style {
-                            color: Some(theme.palette().danger),
-                        }),
-                    },
-                    None => text("Unknown status"),
-                };
-                let settings = column![
-                    row![
-                        text("Server URL: "),
-                        container(
-                            text_input("http://127.0.0.1:4040/", &self.server_url)
-                                .on_input(Message::ServerUrlSubmited)
-                        )
-                        .padding({
-                            Padding {
-                                bottom: 0.0,
-                                top: 0.0,
-                                left: 5.0,
-                                right: 5.0,
-                            }
-                        }),
-                        connection_status,
-                    ]
-                    .align_items(Alignment::Center)
-                    .padding(20),
-                    row![
-                        text("Theme: "),
-                        combo_box(
-                            &self.theme_state,
-                            "No theme selected",
-                            self.selected_theme.as_ref(),
-                            Message::ThemeSelected
-                        )
-                    ]
-                    .align_items(Alignment::Center)
-                    .padding(20),
-                ];
-
-                column![status_bar, title, settings].spacing(20).into()
-            }
+            ViewControl::Settings => views::settings(self),
         }
     }
 

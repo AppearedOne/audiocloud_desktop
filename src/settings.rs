@@ -1,15 +1,52 @@
 use anyhow::*;
+use audiocloud_lib::Sample;
+use iced::Theme;
 use serde_derive::*;
-#[derive(Serialize, Deserialize, Debug)]
+use std::fs;
+use std::path::Path;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Settings {
     pub theme: String,
-    pub favourite_samples: Vec<String>,
+    pub max_results: i32,
+    pub favourite_samples: Vec<Sample>,
+}
+pub async fn load_from_file(path: &str) -> Settings {
+    if !Path::new(path).exists() {
+        return Settings {
+            max_results: 50,
+            theme: Theme::Dark.to_string(),
+            favourite_samples: vec![],
+        };
+    }
+    let filecontent = fs::read_to_string(path).expect("Couldn't read file");
+    let settings: Settings = serde_json::from_str(&filecontent).expect("Couldnt parse file");
+    settings
 }
 
-pub fn load_from_file(path: String) -> Settings {
-    todo!();
+pub async fn save_to_file(settings: Settings, path: &str) {
+    let content = serde_json::to_string_pretty(&settings).unwrap();
+    let _ = fs::write(path, content);
 }
 
-pub fn save_to_file(path: String, settings: &Settings) -> Result<(), anyhow::Error> {
-    todo!();
+impl Settings {
+    pub fn is_favourite(&self, sample: &Sample) -> bool {
+        for s in &self.favourite_samples {
+            if s.path == sample.path {
+                return true;
+            }
+        }
+        false
+    }
+    pub fn add_favourite(&mut self, sample: Sample) {
+        self.favourite_samples.push(sample);
+    }
+    pub fn rem_favourite(&mut self, sample_id: &str) {
+        for i in 0..self.favourite_samples.len() {
+            if self.favourite_samples[i].path.eq(sample_id) {
+                self.favourite_samples.remove(i);
+                break;
+            }
+        }
+    }
 }
