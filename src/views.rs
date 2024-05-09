@@ -16,8 +16,9 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
     let settings_button = button(text(icon_to_string(BootstrapIcon::XLg)).font(ICON_FONT))
         .on_press(Message::SettingsButtonToggled)
         .padding([5, 10, 5, 10]);
-    let status_bar =
-        row![horizontal_space(), status_text, settings_button].align_items(Alignment::Center);
+    let status_bar = row![horizontal_space(), status_text, settings_button]
+        .spacing(10)
+        .align_items(Alignment::Center);
 
     let title = text("Settings")
         .width(Length::Fill)

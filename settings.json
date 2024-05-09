@@ -1,10 +1,40 @@
 {
   "theme": "Kanagawa Dragon",
   "server_url": "http://127.0.0.1:4040/",
-  "max_results": 50,
-  "favourite_samples": [],
+  "max_results": 54,
+  "favourite_samples": [
+    {
+      "path": "Testlib/Platinum Loops/Construction/Guitar James Kit/Full[102] Am Guitar Jams.wav",
+      "name": "Full[102] Am Guitar Jams.wav",
+      "sampletype": {
+        "Loop": 102
+      }
+    },
+    {
+      "path": "Testlib/Battery Selection/Kick/Kick Slam 5.wav",
+      "name": "Kick Slam 5.wav",
+      "sampletype": "OneShot"
+    },
+    {
+      "path": "Testlib/Battery Selection/Snare/Snare Steppa 10.wav",
+      "name": "Snare Steppa 10.wav",
+      "sampletype": "OneShot"
+    },
+    {
+      "path": "Testlib/Battery Selection/Kick/Kick Stadium X2 V5.wav",
+      "name": "Kick Stadium X2 V5.wav",
+      "sampletype": "OneShot"
+    },
+    {
+      "path": "Testlib/Battery Selection/Kick/Kick Off 4 V1.wav",
+      "name": "Kick Off 4 V1.wav",
+      "sampletype": "OneShot"
+    }
+  ],
   "dl_samples_hash": [
     "9460764302542049358",
-    "5569412100691062159"
+    "5569412100691062159",
+    "15157345751983224574",
+    "779880292035271459"
   ]
 }

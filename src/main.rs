@@ -2,10 +2,10 @@ use audiocloud_lib::*;
 use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
 use helpers::hash_sample;
 use iced::event::{self, Event};
-use iced::widget::shader::wgpu::WindowHandle;
+use iced::widget::tooltip::Position;
 use iced::widget::{
-    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
-    text_input,
+    button, checkbox, column, combo_box, container, horizontal_space, hover, row, scrollable,
+    stack, text, text_input, tooltip, vertical_space,
 };
 use iced::{
     alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
@@ -16,13 +16,17 @@ use rodio::{source::Source, Decoder, OutputStream};
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::*;
+use std::time::Instant;
+use widgets::player_widget;
 
 pub mod audio;
+pub mod editor;
 pub mod helpers;
 pub mod request;
 pub mod settings;
 pub mod themes;
 pub mod views;
+pub mod widgets;
 
 #[tokio::main]
 async fn main() -> iced::Result {
@@ -56,6 +60,8 @@ pub struct AudioCloud {
 
     settings: settings::Settings,
     status_message: String,
+
+    player: widgets::Player,
 }
 
 enum ViewControl {
@@ -69,7 +75,7 @@ pub enum Message {
     Exit(()),
     RecivedHandle,
 
-    DragSample(String),
+    CopySample(String),
 
     InputChanged(String),
     CreateTask,
@@ -78,10 +84,13 @@ pub enum Message {
     ServerStatusUpdate(bool),
     ServerUrlSubmited(String),
 
-    PlaySample(String),
+    PlaySample(String, String),
     TempAudioLoaded(String),
     DownloadSample(String),
     SampleAudioDownloaded(String),
+    SamplePlayDone(Instant),
+    TogglePlayer,
+    VolumeChanged(f32),
 
     ThemeSelected(Theme),
 
@@ -172,6 +181,13 @@ impl AudioCloud {
                     dl_samples_hash: vec![],
                 },
                 status_message: String::from("idle... "),
+
+                player: widgets::Player {
+                    is_playing: false,
+                    name: "None".to_string(),
+                    volume: 1.0,
+                    last_update_playing: Instant::now(),
+                },
             },
             Command::none(),
         )
@@ -220,7 +236,7 @@ impl AudioCloud {
             Message::SearchResultRecived(val) => {
                 if val.samples.len() > 0 {
                     self.results = Some(val)
-                } else {
+                } else if !self.show_all_favourites {
                     self.results = None
                 }
             }
@@ -238,11 +254,12 @@ impl AudioCloud {
                 self.server_status = Some(status);
             }
 
-            Message::PlaySample(path) => {
-                return send_file_preview_dl(self.settings.server_url.clone(), path)
+            Message::PlaySample(path, name) => {
+                self.player.name = name;
+                return send_file_preview_dl(self.settings.server_url.clone(), path);
             }
             Message::TempAudioLoaded(path) => {
-                let file = BufReader::new(File::open(path).expect("Couldnt open file"));
+                let file = BufReader::new(File::open(&path).expect("Couldnt open file"));
                 let source = Decoder::new(file).expect("Couldnt build source from file");
                 match &self.audio_devices {
                     Some(devs) => {
@@ -250,10 +267,46 @@ impl AudioCloud {
                             devs.sink.clear();
                         }
 
+                        let dur = &source.total_duration();
+                        devs.sink.set_volume(self.player.volume);
                         devs.sink.append(source);
                         devs.sink.play();
+                        self.player.is_playing = true;
+
+                        let now = Instant::now();
+                        self.player.last_update_playing = now;
+                        return audio::wait_playback_end(dur.clone(), now);
                     }
                     None => println!("Error loading devices from option"),
+                }
+            }
+            Message::SamplePlayDone(mod_stamp) => {
+                if mod_stamp == self.player.last_update_playing {
+                    self.player.is_playing = false;
+                    self.player.name = String::from("None");
+                }
+            }
+            Message::TogglePlayer => match &self.audio_devices {
+                Some(devs) => {
+                    if !devs.sink.empty() {
+                        if devs.sink.is_paused() {
+                            devs.sink.play();
+                        } else {
+                            devs.sink.pause();
+                        }
+                        self.player.is_playing = !self.player.is_playing;
+                        self.player.last_update_playing = Instant::now();
+                    }
+                }
+                None => println!("Error loading devices from option"),
+            },
+            Message::VolumeChanged(val) => {
+                self.player.volume = val;
+                match &self.audio_devices {
+                    Some(devs) => {
+                        devs.sink.set_volume(val);
+                    }
+                    None => (),
                 }
             }
             Message::ThemeSelected(theme) => {
@@ -316,16 +369,16 @@ impl AudioCloud {
                 self.settings.add_dl_entry(&path);
                 self.status_message = "Downloaded sample ".to_string();
             }
-            Message::DragSample(path) => {
+            Message::CopySample(path) => {
                 let rel_str = String::from("cached/".to_string() + &hash_sample(&path) + ".wav");
                 let relative_path = Path::new(&rel_str);
                 let mut absolute_path = std::env::current_dir().unwrap();
                 absolute_path.push(relative_path);
                 let abs_str: String = absolute_path.to_str().unwrap().to_string();
                 let filepath = vec![abs_str];
-                println!("trying");
-                let ctx = ClipboardContext::new().unwrap();
-                ctx.set_files(filepath).unwrap();
+                let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
+                ctx.set_files(filepath).expect("couldnt set to clipboard");
+                self.status_message = String::from("Copied sample ");
             }
         }
         Command::none()
@@ -340,7 +393,9 @@ impl AudioCloud {
                         .on_press(Message::SettingsButtonToggled)
                         .padding([5, 10, 5, 10]);
                 let status_bar = container(
-                    row![horizontal_space(), status_text, settings].align_items(Alignment::Center),
+                    row![horizontal_space(), status_text, settings]
+                        .spacing(10)
+                        .align_items(Alignment::Center),
                 );
 
                 let title = text("Audiocloud")
@@ -366,8 +421,17 @@ impl AudioCloud {
                             color: Some(theme.palette().success),
                         }
                     }),
-                    false => text(icon_to_string(BootstrapIcon::StarFill)),
+                    false => text(icon_to_string(BootstrapIcon::Star)),
                 };
+                let fav_all = tooltip(
+                    button(fav_all_text.font(ICON_FONT).size(22))
+                        .style(button::text)
+                        .on_press(Message::ShowAllFavourites),
+                    text("Show all favourites"),
+                    Position::Left,
+                )
+                .gap(10)
+                .style(container::rounded_box);
 
                 let tempo_filter_button = button(text("Tempo"));
 
@@ -384,9 +448,7 @@ impl AudioCloud {
                         .style(checkbox::success),
                     tempo_filter_button,
                     horizontal_space(),
-                    button(fav_all_text.font(ICON_FONT).size(22))
-                        .style(button::text)
-                        .on_press(Message::ShowAllFavourites)
+                    fav_all
                 ]
                 .align_items(Alignment::Center)
                 .padding(Padding {
@@ -476,7 +538,7 @@ impl AudioCloud {
                                     .on_press(Message::DownloadSample(sample.path.clone())),
                                 true => button(dl_text.font(ICON_FONT).size(20))
                                     .style(button::text)
-                                    .on_press(Message::DragSample(sample.path.clone())),
+                                    .on_press(Message::CopySample(sample.path.clone())),
                             };
 
                             let sample_entry = container(
@@ -488,7 +550,12 @@ impl AudioCloud {
                                     )
                                     .style(|theme, status| button::text(theme, status))
                                     .padding(20)
-                                    .on_press(Message::PlaySample(sample.path.to_string())),
+                                    .on_press(
+                                        Message::PlaySample(
+                                            sample.path.to_string(),
+                                            sample.name.clone()
+                                        )
+                                    ),
                                     column![text(name).size(25), type_label],
                                     horizontal_space(),
                                     dl_button,
@@ -512,11 +579,24 @@ impl AudioCloud {
                     scrollable(result_row)
                         .style(|theme, status| themes::scrollbar_invis(theme, status)),
                 )
-                .padding(10);
+                .padding(widgets::padding_now(10));
 
-                column![status_bar, title, input, filters, result_scollable]
-                    .spacing(20)
-                    .into()
+                let spacer = vertical_space().height(Length::Fixed(20.0));
+                let spacer2 = vertical_space().height(Length::Fixed(20.0));
+                let spacer3 = vertical_space().height(Length::Fixed(1.0));
+                column![
+                    status_bar,
+                    vertical_space().height(Length::Fixed(20.0)),
+                    title,
+                    spacer,
+                    input,
+                    spacer2,
+                    filters,
+                    spacer3,
+                    result_scollable.height(Length::Fill),
+                    player_widget(&self)
+                ]
+                .into()
             }
             ViewControl::Settings => views::settings(self),
         }
