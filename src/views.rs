@@ -84,8 +84,9 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
             button(text("Save settings"))
                 .on_press(Message::SaveSettings)
                 .style(button::success),
+            button(text("Reload settings")).on_press(Message::LoadSettings),
             button(text("Reset settings")).style(button::danger),
-            button(text("Reload settings")).on_press(Message::LoadSettings)
+            button(text("Reset downloads")).style(button::danger)
         ]
         .spacing(15)
         .align_items(Alignment::Center)

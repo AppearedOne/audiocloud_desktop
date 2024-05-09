@@ -13,7 +13,7 @@ use iced::{
 use iced::{overlay, window};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use rodio::{source::Source, Decoder, OutputStream};
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
 use std::time::Instant;
@@ -57,6 +57,7 @@ pub struct AudioCloud {
     show_loops: bool,
     show_only_favourites: bool,
     show_all_favourites: bool,
+    pack_meta: Vec<PackInfo>,
 
     settings: settings::Settings,
     status_message: String,
@@ -105,6 +106,7 @@ pub enum Message {
     SaveSettings,
     SettingsLoaded(settings::Settings),
     SettingsSaved(()),
+    PacksMetaRecived(Vec<PackInfo>),
 
     ToggleFavourite(Sample),
 }
@@ -172,6 +174,7 @@ impl AudioCloud {
                 show_loops: true,
                 show_only_favourites: false,
                 show_all_favourites: false,
+                pack_meta: vec![],
 
                 settings: settings::Settings {
                     max_results: 50,
@@ -220,7 +223,7 @@ impl AudioCloud {
                 }
             }
             Message::Exit(_) => {
-                println!("exiting");
+                println!("Saved!");
                 return window::close(window::Id::MAIN);
             }
             Message::RecivedHandle => {}
@@ -336,6 +339,14 @@ impl AudioCloud {
                 self.settings = val;
                 self.selected_theme = themes::string_to_theme(&self.settings.clone().theme);
                 self.status_message = "Loaded settings ".to_string();
+                return Command::perform(
+                    request::get_packs_meta(self.settings.server_url.clone()),
+                    Message::PacksMetaRecived,
+                );
+            }
+            Message::PacksMetaRecived(metas) => {
+                self.pack_meta = metas;
+                self.status_message = String::from("Recived PackIDs");
             }
             Message::SaveSettings => {
                 let mut set = self.settings.clone();

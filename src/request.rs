@@ -1,5 +1,6 @@
 use audiocloud_lib::*;
 use reqwest::Client;
+use std::any::Any;
 use std::fs::{self, File};
 use std::io;
 
@@ -46,6 +47,21 @@ pub async fn get_temp_audio(server_url: String, file_path: String) -> String {
     let body = response.bytes().await.expect("body invalid");
     let _ = std::fs::write(tempaudio_path, &body);
     String::from(tempaudio_path)
+}
+
+pub async fn get_packs_meta(server_url: String) -> Vec<PackInfo> {
+    let client = Client::new();
+    let url = server_url + "packs";
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .expect("Couldnt perform request")
+        .text()
+        .await
+        .expect("couldnt get text from response");
+    let out: Vec<PackInfo> = serde_json::from_str(&response).expect("Couldn't convert json");
+    out
 }
 
 pub async fn dl_sample(server_url: String, file_path: String) -> String {
