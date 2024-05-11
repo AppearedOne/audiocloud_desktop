@@ -4,13 +4,13 @@ use helpers::hash_sample;
 use iced::event::{self, Event};
 use iced::widget::tooltip::Position;
 use iced::widget::{
-    button, checkbox, column, combo_box, container, horizontal_space, hover, row, scrollable,
-    stack, text, text_input, tooltip, vertical_space,
+    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, stack, text,
+    text_input, tooltip, vertical_space,
 };
+use iced::window;
 use iced::{
     alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
 };
-use iced::{overlay, window};
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use rodio::{source::Source, Decoder, OutputStream};
 use std::fs::File;
@@ -68,6 +68,7 @@ pub struct AudioCloud {
 enum ViewControl {
     Main,
     Settings,
+    Editor,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +108,9 @@ pub enum Message {
     SettingsLoaded(settings::Settings),
     SettingsSaved(()),
     PacksMetaRecived(Vec<PackInfo>),
+    ResetSettings,
+    ResetCache,
+    CacheReset(Vec<String>),
 
     ToggleFavourite(Sample),
 }
@@ -234,7 +238,7 @@ impl AudioCloud {
             Message::CreateTask => {}
             Message::SettingsButtonToggled => match self.view {
                 ViewControl::Settings => self.view = ViewControl::Main,
-                ViewControl::Main => self.view = ViewControl::Settings,
+                _ => self.view = ViewControl::Settings,
             },
             Message::SearchResultRecived(val) => {
                 if val.samples.len() > 0 {
@@ -390,6 +394,31 @@ impl AudioCloud {
                 let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
                 ctx.set_files(filepath).expect("couldnt set to clipboard");
                 self.status_message = String::from("Copied sample ");
+            }
+            Message::ResetSettings => {
+                self.settings = settings::Settings {
+                    max_results: 50,
+                    server_url: "http://127.0.0.1:4040/".to_string(),
+                    theme: "Dark".to_string(),
+                    favourite_samples: vec![],
+                    dl_samples_hash: vec![],
+                };
+                let mut set = self.settings.clone();
+                match &self.selected_theme {
+                    Some(theme) => set.theme = theme.to_string(),
+                    None => set.theme = "Dark".to_string(),
+                }
+
+                return Command::perform(
+                    settings::save_to_file(set, "settings.json"),
+                    Message::SettingsSaved,
+                );
+            }
+            Message::ResetCache => {
+                return Command::perform(helpers::clear_cached(), Message::CacheReset);
+            }
+            Message::CacheReset(val) => {
+                self.settings.dl_samples_hash = val;
             }
         }
         Command::none()
@@ -610,6 +639,7 @@ impl AudioCloud {
                 .into()
             }
             ViewControl::Settings => views::settings(self),
+            ViewControl::Editor => editor::view(self),
         }
     }
 
