@@ -1,5 +1,7 @@
 use audiocloud_lib::*;
 use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
+use drag::*;
+use editor::Editor;
 use helpers::hash_sample;
 use iced::event::{self, Event};
 use iced::widget::tooltip::Position;
@@ -12,11 +14,14 @@ use iced::{
     alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
 };
 use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use rodio::{source::Source, Decoder, OutputStream};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
 use std::time::Instant;
+use waveform::waveform;
 use widgets::player_widget;
 
 pub mod audio;
@@ -26,7 +31,10 @@ pub mod request;
 pub mod settings;
 pub mod themes;
 pub mod views;
+pub mod waveform;
 pub mod widgets;
+
+const ARRAYLEN: i32 = 800;
 
 #[tokio::main]
 async fn main() -> iced::Result {
@@ -63,6 +71,8 @@ pub struct AudioCloud {
     status_message: String,
 
     player: widgets::Player,
+
+    editor: Editor,
 }
 
 enum ViewControl {
@@ -77,7 +87,12 @@ pub enum Message {
     Exit(()),
     RecivedHandle,
 
+    GoHome,
+    EditorSessionDL(Sample),
+    EditorSession(Sample, String),
+
     CopySample(String),
+    DragPerformed,
 
     InputChanged(String),
     CreateTask,
@@ -113,6 +128,7 @@ pub enum Message {
     CacheReset(Vec<String>),
 
     ToggleFavourite(Sample),
+    ShuffleResults,
 }
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
@@ -135,6 +151,7 @@ fn send_file_dl(server_url: String, path: String) -> Command<Message> {
         Message::SampleAudioDownloaded,
     )
 }
+
 impl AudioCloud {
     fn create_request_command(&self, input: String) -> Command<Message> {
         if input.is_empty() || input.eq("-") {
@@ -195,6 +212,7 @@ impl AudioCloud {
                     volume: 1.0,
                     last_update_playing: Instant::now(),
                 },
+                editor: Editor::empty(),
             },
             Command::none(),
         )
@@ -385,6 +403,24 @@ impl AudioCloud {
                 self.status_message = "Downloaded sample ".to_string();
             }
             Message::CopySample(path) => {
+                /*return iced::window::run_with_handle(iced::window::Id::MAIN, |window| {
+                    start_drag(
+                        &window,
+                        DragItem::Files(vec![PathBuf::from(path)]),
+                        Image::Raw(include_bytes!("../icon.png").to_vec()),
+                        |result: DragResult, cursor_pos: CursorPosition| {
+                            println!(
+                                "--> Drop Result: [{:?}], Cursor Pos:[{:?}]",
+                                result, cursor_pos
+                            );
+                        },
+                        Options {
+                            skip_animatation_on_cancel_or_failure: false,
+                        },
+                    )
+                    .expect("Couldnt start_drag");
+                    Message::DragPerformed
+                });*/
                 let rel_str = String::from("cached/".to_string() + &hash_sample(&path) + ".wav");
                 let relative_path = Path::new(&rel_str);
                 let mut absolute_path = std::env::current_dir().unwrap();
@@ -395,6 +431,7 @@ impl AudioCloud {
                 ctx.set_files(filepath).expect("couldnt set to clipboard");
                 self.status_message = String::from("Copied sample ");
             }
+            Message::DragPerformed => {}
             Message::ResetSettings => {
                 self.settings = settings::Settings {
                     max_results: 50,
@@ -420,6 +457,13 @@ impl AudioCloud {
             Message::CacheReset(val) => {
                 self.settings.dl_samples_hash = val;
             }
+            Message::GoHome => self.view = ViewControl::Main,
+            Message::EditorSessionDL(sample) => {}
+            Message::EditorSession(sample, audio) => {}
+            Message::ShuffleResults => match &mut self.results {
+                Some(res) => res.samples.shuffle(&mut thread_rng()),
+                None => (),
+            },
         }
         Command::none()
     }
@@ -472,6 +516,19 @@ impl AudioCloud {
                 )
                 .gap(10)
                 .style(container::rounded_box);
+                let shuffle_order = tooltip(
+                    button(
+                        text(icon_to_string(BootstrapIcon::Shuffle))
+                            .font(ICON_FONT)
+                            .size(22),
+                    )
+                    .style(button::text)
+                    .on_press(Message::ShuffleResults),
+                    text("Shuffle results"),
+                    Position::Left,
+                )
+                .gap(10)
+                .style(container::rounded_box);
 
                 let tempo_filter_button = button(text("Tempo"));
 
@@ -488,6 +545,7 @@ impl AudioCloud {
                         .style(checkbox::success),
                     tempo_filter_button,
                     horizontal_space(),
+                    shuffle_order,
                     fav_all
                 ]
                 .align_items(Alignment::Center)
@@ -546,6 +604,7 @@ impl AudioCloud {
 
                             let edit_text = icon_to_string(BootstrapIcon::VinylFill);
                             let edit_button = button(text(edit_text).size(20).font(ICON_FONT))
+                                .on_press(Message::EditorSessionDL(sample.clone()))
                                 .style(button::text);
 
                             let fav_text = match self.settings.is_favourite(sample) {

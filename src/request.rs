@@ -34,6 +34,25 @@ pub async fn get_result(params: SearchParams, path: String) -> SearchResult {
     let out: SearchResult = serde_json::from_str(&response).expect("Couldnt parse response");
     out
 }
+pub async fn get_editor_audio(
+    sample: Sample,
+    server_url: String,
+    file_path: String,
+) -> (Sample, String) {
+    let tempaudio_path = "Editor.wav";
+    let client = Client::new();
+    let file_path_web = file_path.replace("#", "%23").replace(" ", "%20");
+    let url = server_url + "samples/" + &file_path_web;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .expect("Couldnt send file get request");
+    let body = response.bytes().await.expect("body invalid");
+    let _ = std::fs::write(tempaudio_path, &body);
+    (sample, String::from(tempaudio_path))
+}
+
 pub async fn get_temp_audio(server_url: String, file_path: String) -> String {
     let tempaudio_path = "Tempaudio.wav";
     let client = Client::new();
@@ -60,6 +79,7 @@ pub async fn get_packs_meta(server_url: String) -> Vec<PackInfo> {
         .text()
         .await
         .expect("couldnt get text from response");
+    print!("{}", response);
     let out: Vec<PackInfo> = serde_json::from_str(&response).expect("Couldn't convert json");
     out
 }

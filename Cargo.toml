@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 #iced = "0.12.1"
-iced = { git = "https://github.com/iced-rs/iced/", branch = "master", features = ["tokio"] }
+iced = { git = "https://github.com/iced-rs/iced/", branch = "master", features = ["tokio", "advanced"] }
 serde = "1.0.198"
 serde_json = "1.0.116"
 serde_yaml = "0.9.34"
@@ -20,3 +20,5 @@ rodio = "0.18.0"
 serde_derive = "1.0.200"
 xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 clipboard-rs = "0.1.7"
+drag = { path = "../drag-rs/crates/drag" }
+rand = "0.8.5"

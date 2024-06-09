@@ -1,7 +1,54 @@
 {
-  "theme": "Kanagawa Dragon",
-  "server_url": "http://127.0.0.1:4040/",
-  "max_results": 50,
-  "favourite_samples": [],
-  "dl_samples_hash": []
+  "theme": "Gruvbox Dark",
+  "server_url": "http://192.168.1.51:4040/",
+  "max_results": 100,
+  "favourite_samples": [
+    {
+      "path": "lib/SampleArchive/NI/Marble Rims Library_Loops/Construction/KC 88 Piano Riffs/Keys[92] F KC88PianoRiffs 7.wav",
+      "name": "Keys[92] F KC88PianoRiffs 7.wav",
+      "sampletype": {
+        "Loop": 92
+      }
+    },
+    {
+      "path": "lib/SampleArchive/JAKE REED SUPER DEAD DRUMS VOL  2/SDD VOL 2 ONE SHOTS/SDD 2 KICK/SDD 2 KICK V7/JR_SDD2_KICK_V7_c.wav",
+      "name": "JR_SDD2_KICK_V7_c.wav",
+      "sampletype": "OneShot"
+    },
+    {
+      "path": "lib/SampleArchive/JAKE REED SUPER DEAD DRUMS VOL  2/CRAZY FILLS/120 BPM CRAZY FILLS/JR_SDD2_CRAZY_FILL_12_120_BPM.wav",
+      "name": "JR_SDD2_CRAZY_FILL_12_120_BPM.wav",
+      "sampletype": {
+        "Loop": 0
+      }
+    },
+    {
+      "path": "lib/SampleArchive/JAKE REED SUPER DEAD DRUMS VOL  2/CRAZY FILLS/120 BPM CRAZY FILLS/JR_SDD2_CRAZY_FILL_17_120_BPM.wav",
+      "name": "JR_SDD2_CRAZY_FILL_17_120_BPM.wav",
+      "sampletype": {
+        "Loop": 0
+      }
+    },
+    {
+      "path": "lib/SampleArchive/JAKE REED SUPER DEAD DRUMS VOL  2/CRAZY FILLS/120 BPM CRAZY FILLS/JR_SDD2_CRAZY_FILL_6_120_BPM.wav",
+      "name": "JR_SDD2_CRAZY_FILL_6_120_BPM.wav",
+      "sampletype": {
+        "Loop": 0
+      }
+    },
+    {
+      "path": "lib/SampleArchive/JAKE REED SUPER DEAD DRUMS VOL  2/SDD VOL 2 ONE SHOTS/SDD 2 KICK/SDD 2 KICK V11/JR_SDD2_KICK_V11_a.wav",
+      "name": "JR_SDD2_KICK_V11_a.wav",
+      "sampletype": "OneShot"
+    }
+  ],
+  "dl_samples_hash": [
+    "9109617155460899285",
+    "16616701758281842180",
+    "688294926707704843",
+    "11410117267533214753",
+    "11136374446634766778",
+    "8434371412595408284",
+    "10790514929589080591"
+  ]
 }
