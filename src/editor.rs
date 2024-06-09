@@ -1,6 +1,6 @@
 use crate::themes;
 use crate::waveform::waveform;
-use crate::{AudioCloud, Message, ARRAYLEN, ICON_FONT};
+use crate::{AudioCloud, Message, ViewControl, ARRAYLEN, ICON_FONT};
 use audiocloud_lib::*;
 use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, stack, text,
@@ -41,13 +41,13 @@ impl Editor {
 pub fn view(app: &AudioCloud) -> Element<Message> {
     let status_text = text(&app.status_message).style(themes::text_fg);
     let settings = button(text(icon_to_string(BootstrapIcon::HouseFill)).font(ICON_FONT))
-        .on_press(Message::GoHome)
+        .on_press(Message::GoView(ViewControl::Main))
         .padding([5, 10, 5, 10]);
     let status_bar = container(
         row![horizontal_space(), status_text, settings]
             .spacing(10)
             .align_items(Alignment::Center),
     );
-    let wav = waveform(200.0, 99.9, app.editor.wav).color(Color::WHITE);
-    column![status_bar, text("ah"),].into()
+    let wav = waveform(app.editor.wav).color(Color::WHITE);
+    column![status_bar, text("ah"), wav].into()
 }

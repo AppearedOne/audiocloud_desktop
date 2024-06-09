@@ -5,19 +5,30 @@ use iced::advanced::widget::{self, Widget};
 use iced::mouse;
 use iced::{Border, Color, Element, Length, Rectangle, Size};
 pub struct Waveform {
-    width: f32,
     color: Color,
-    pos: f32,
     vals: [f32; ARRAYLEN as usize],
 }
 
-impl Waveform {
-    fn new(width: f32, pos: f32, vals: [f32; ARRAYLEN as usize]) -> Self {
-        Waveform {
-            width,
+pub fn get_waveform(samples_audio: Vec<f32>) -> [f32; ARRAYLEN as usize] {
+    let mut samples = samples_audio.clone();
+    let mut arr: [f32; ARRAYLEN as usize] = [0.0; ARRAYLEN as usize];
+    let divider = samples.len() / ARRAYLEN as usize;
+    for i in 0..ARRAYLEN {
+        let sum: f32 = samples.drain(0..divider as usize).map(|v| v * v).sum();
+        let average = sum / divider as f32;
+        arr[i as usize] = average.sqrt();
+    }
 
+    return arr;
+}
+pub async fn get_waveform_tk(samples_audio: Vec<f32>) -> [f32; ARRAYLEN as usize] {
+    get_waveform(samples_audio)
+}
+
+impl Waveform {
+    fn new(vals: [f32; ARRAYLEN as usize]) -> Self {
+        Waveform {
             color: Color::BLACK,
-            pos,
             vals,
         }
     }
@@ -27,8 +38,8 @@ impl Waveform {
     }
 }
 
-pub fn waveform(width: f32, pos: f32, vals: [f32; ARRAYLEN as usize]) -> Waveform {
-    Waveform::new(width, pos, vals)
+pub fn waveform(vals: [f32; ARRAYLEN as usize]) -> Waveform {
+    Waveform::new(vals)
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Waveform
@@ -48,9 +59,7 @@ where
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let max = limits.max();
-        let min = limits.min();
-        layout::Node::new(max)
+        layout::Node::new(limits.max())
     }
 
     fn draw(
@@ -74,7 +83,7 @@ where
         let steps: i32 = ARRAYLEN;
         let step_width = bounds.width / steps as f32;
 
-        let playing_step = ((self.pos / 100.0) * steps as f32).round() as i32;
+        let playing_step = ((10.0 / 100.0) * steps as f32).round() as i32;
 
         //Scale Averages
         let max: f32 = self
@@ -107,7 +116,7 @@ where
                     bounds: rec,
                     border: Border {
                         color: Color::WHITE,
-                        width: 0.1,
+                        width: 0.0,
                         radius: 0.0.into(),
                     },
                     ..renderer::Quad::default()

@@ -75,6 +75,7 @@ pub struct AudioCloud {
     editor: Editor,
 }
 
+#[derive(Clone, Debug)]
 enum ViewControl {
     Main,
     Settings,
@@ -87,7 +88,7 @@ pub enum Message {
     Exit(()),
     RecivedHandle,
 
-    GoHome,
+    GoView(ViewControl),
     EditorSessionDL(Sample),
     EditorSession(Sample, String),
 
@@ -457,7 +458,7 @@ impl AudioCloud {
             Message::CacheReset(val) => {
                 self.settings.dl_samples_hash = val;
             }
-            Message::GoHome => self.view = ViewControl::Main,
+            Message::GoView(v) => self.view = v,
             Message::EditorSessionDL(sample) => {}
             Message::EditorSession(sample, audio) => {}
             Message::ShuffleResults => match &mut self.results {
