@@ -20,5 +20,5 @@ rodio = "0.18.0"
 serde_derive = "1.0.200"
 xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 clipboard-rs = "0.1.7"
-drag = { path = "../drag-rs/crates/drag" }
+# drag = { path = "../drag-rs/crates/drag" }
 rand = "0.8.5"

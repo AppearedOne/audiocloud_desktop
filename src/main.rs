@@ -1,6 +1,5 @@
 use audiocloud_lib::*;
 use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
-use drag::*;
 use editor::Editor;
 use helpers::hash_sample;
 use iced::event::{self, Event};
