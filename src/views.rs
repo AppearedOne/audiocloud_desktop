@@ -3,8 +3,8 @@ use iced::widget::{
     text, text_input,
 };
 use iced::{alignment, Alignment, Element, Length, Padding, Theme};
-use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon};
 
+use crate::bootstrap::*;
 use crate::themes;
 use crate::AudioCloud;
 use crate::Message;
@@ -12,7 +12,7 @@ use crate::ICON_FONT;
 
 pub fn settings(app: &AudioCloud) -> Element<Message> {
     let status_text = text(&app.status_message).style(themes::text_fg);
-    let settings_button = button(text(icon_to_string(BootstrapIcon::XLg)).font(ICON_FONT))
+    let settings_button = button(text(icon_to_string(Bootstrap::XLg)).font(ICON_FONT))
         .on_press(Message::SettingsButtonToggled)
         .padding([5, 10, 5, 10]);
     let status_bar = row![horizontal_space(), status_text, settings_button]

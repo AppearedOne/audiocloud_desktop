@@ -1,21 +1,20 @@
 use audiocloud_lib::*;
-use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
+#[cfg(not(target_arch = "wasm32"))]
+use clipboard_rs::{Clipboard, ClipboardContext};
+
 use editor::Editor;
 use helpers::hash_sample;
 use iced::event::{self, Event};
 use iced::widget::tooltip::Position;
 use iced::widget::{
-    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, stack, text,
+    button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, text,
     text_input, tooltip, vertical_space,
 };
 use iced::window;
-use iced::{
-    alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
-};
-use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
+use iced::{alignment, Alignment, Command, Element, Font, Length, Padding, Subscription, Theme};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rodio::{source::Source, Decoder, OutputStream};
+use rodio::{source::Source, Decoder};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
@@ -24,6 +23,10 @@ use waveform::waveform;
 use widgets::player_widget;
 
 pub mod audio;
+
+pub mod bootstrap;
+use bootstrap::*;
+
 pub mod editor;
 pub mod helpers;
 pub mod request;
@@ -34,12 +37,14 @@ pub mod waveform;
 pub mod widgets;
 
 const ARRAYLEN: i32 = 800;
+const ICON_FONT_BYTES: &[u8] = include_bytes!("assets/icons.ttf");
 
-#[tokio::main]
+#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
+#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
 async fn main() -> iced::Result {
     iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
-        .font(BOOTSTRAP_FONT_BYTES)
+        .font(ICON_FONT_BYTES)
         .subscription(AudioCloud::subscription)
         .load(|| {
             Command::perform(
@@ -47,6 +52,7 @@ async fn main() -> iced::Result {
                 Message::SettingsLoaded,
             )
         })
+        .font(ICON_FONT_BYTES)
         .exit_on_close_request(false)
         .run()
 }
@@ -75,7 +81,7 @@ pub struct AudioCloud {
 }
 
 #[derive(Clone, Debug)]
-enum ViewControl {
+pub enum ViewControl {
     Main,
     Settings,
     Editor,
@@ -427,9 +433,17 @@ impl AudioCloud {
                 absolute_path.push(relative_path);
                 let abs_str: String = absolute_path.to_str().unwrap().to_string();
                 let filepath = vec![abs_str];
-                let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
-                ctx.set_files(filepath).expect("couldnt set to clipboard");
-                self.status_message = String::from("Copied sample ");
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
+                    ctx.set_files(filepath).expect("couldnt set to clipboard");
+                    self.status_message = String::from("Copied sample ");
+                    return Command::none();
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    self.status_message = String::from("Copying on WASM unsupported");
+                }
             }
             Message::DragPerformed => {}
             Message::ResetSettings => {
@@ -472,10 +486,9 @@ impl AudioCloud {
         let status_text = text(&self.status_message).style(themes::text_fg);
         match self.view {
             ViewControl::Main => {
-                let settings =
-                    button(text(icon_to_string(BootstrapIcon::GearFill)).font(ICON_FONT))
-                        .on_press(Message::SettingsButtonToggled)
-                        .padding([5, 10, 5, 10]);
+                let settings = button(text(icon_to_string(Bootstrap::GearFill)).font(ICON_FONT))
+                    .on_press(Message::SettingsButtonToggled)
+                    .padding([5, 10, 5, 10]);
                 let status_bar = container(
                     row![horizontal_space(), status_text, settings]
                         .spacing(10)
@@ -500,12 +513,12 @@ impl AudioCloud {
                 });
 
                 let fav_all_text = match self.show_all_favourites {
-                    true => text(icon_to_string(BootstrapIcon::StarFill)).style(|theme: &Theme| {
+                    true => text(icon_to_string(Bootstrap::StarFill)).style(|theme: &Theme| {
                         text::Style {
                             color: Some(theme.palette().success),
                         }
                     }),
-                    false => text(icon_to_string(BootstrapIcon::Star)),
+                    false => text(icon_to_string(Bootstrap::Star)),
                 };
                 let fav_all = tooltip(
                     button(fav_all_text.font(ICON_FONT).size(22))
@@ -518,7 +531,7 @@ impl AudioCloud {
                 .style(container::rounded_box);
                 let shuffle_order = tooltip(
                     button(
-                        text(icon_to_string(BootstrapIcon::Shuffle))
+                        text(icon_to_string(Bootstrap::Shuffle))
                             .font(ICON_FONT)
                             .size(22),
                     )
@@ -581,7 +594,7 @@ impl AudioCloud {
                             let type_text = match sample.sampletype {
                                 SampleType::OneShot => {
                                     row![
-                                        text(icon_to_string(BootstrapIcon::Soundwave))
+                                        text(icon_to_string(Bootstrap::Soundwave))
                                             .font(ICON_FONT)
                                             .style(themes::text_fg),
                                         text(" OneShot").style(themes::text_fg),
@@ -589,7 +602,7 @@ impl AudioCloud {
                                 }
                                 SampleType::Loop(tempo) => {
                                     row![
-                                        text(icon_to_string(BootstrapIcon::ArrowRepeat))
+                                        text(icon_to_string(Bootstrap::ArrowRepeat))
                                             .font(ICON_FONT)
                                             .style(themes::text_fg),
                                         text(" Loop ").style(themes::text_fg),
@@ -602,30 +615,30 @@ impl AudioCloud {
                             let type_label =
                                 container(type_text).align_y(alignment::Vertical::Center);
 
-                            let edit_text = icon_to_string(BootstrapIcon::VinylFill);
+                            let edit_text = icon_to_string(Bootstrap::VinylFill);
                             let edit_button = button(text(edit_text).size(20).font(ICON_FONT))
                                 .on_press(Message::EditorSessionDL(sample.clone()))
                                 .style(button::text);
 
                             let fav_text = match self.settings.is_favourite(sample) {
-                                true => text(icon_to_string(BootstrapIcon::StarFill)).style(
+                                true => text(icon_to_string(Bootstrap::StarFill)).style(
                                     |theme: &Theme| text::Style {
                                         color: Some(theme.palette().success),
                                     },
                                 ),
-                                false => text(icon_to_string(BootstrapIcon::Star)),
+                                false => text(icon_to_string(Bootstrap::Star)),
                             };
                             let fav_button = button(fav_text.font(ICON_FONT).size(20))
                                 .style(button::text)
                                 .on_press(Message::ToggleFavourite(sample.clone()));
 
                             let dl_text = match self.settings.is_downloaded(&sample.path) {
-                                false => text(icon_to_string(BootstrapIcon::Download)).style(
+                                false => text(icon_to_string(Bootstrap::Download)).style(
                                     |theme: &Theme| text::Style {
                                         color: Some(theme.extended_palette().primary.strong.color),
                                     },
                                 ),
-                                true => text(icon_to_string(BootstrapIcon::BoxArrowUpRight)).style(
+                                true => text(icon_to_string(Bootstrap::BoxArrowUpRight)).style(
                                     |theme: &Theme| text::Style {
                                         color: Some(theme.palette().success),
                                     },
@@ -643,7 +656,7 @@ impl AudioCloud {
                             let sample_entry = container(
                                 row![
                                     button(
-                                        text(icon_to_string(BootstrapIcon::PlayFill))
+                                        text(icon_to_string(Bootstrap::PlayFill))
                                             .font(ICON_FONT)
                                             .size(25)
                                     )

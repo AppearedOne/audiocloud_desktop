@@ -1,3 +1,4 @@
+use crate::bootstrap::*;
 use crate::themes;
 use crate::waveform::waveform;
 use crate::{AudioCloud, Message, ViewControl, ARRAYLEN, ICON_FONT};
@@ -9,7 +10,6 @@ use iced::widget::{
 use iced::Color;
 use iced::Element;
 use iced::{Alignment, Command, Padding, Subscription, Theme};
-use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon};
 
 pub struct Editor {
     pub sample: Sample,
@@ -40,7 +40,7 @@ impl Editor {
 }
 pub fn view(app: &AudioCloud) -> Element<Message> {
     let status_text = text(&app.status_message).style(themes::text_fg);
-    let settings = button(text(icon_to_string(BootstrapIcon::HouseFill)).font(ICON_FONT))
+    let settings = button(text(icon_to_string(Bootstrap::HouseFill)).font(ICON_FONT))
         .on_press(Message::GoView(ViewControl::Main))
         .padding([5, 10, 5, 10]);
     let status_bar = container(

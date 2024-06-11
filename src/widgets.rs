@@ -1,3 +1,4 @@
+use crate::bootstrap::*;
 use crate::{AudioCloud, Message, ICON_FONT};
 use iced::border::Radius;
 use iced::widget::{
@@ -7,7 +8,6 @@ use iced::widget::{
 use iced::{
     alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
 };
-use iced_aw::graphics::icons::{bootstrap::icon_to_string, BootstrapIcon, BOOTSTRAP_FONT_BYTES};
 use std::ops::RangeInclusive;
 use std::time::Instant;
 
@@ -29,23 +29,23 @@ pub fn padding_now(num: i32) -> Padding {
 
 pub fn player_widget(app: &AudioCloud) -> Element<Message> {
     let icon = match app.player.is_playing {
-        true => BootstrapIcon::Pause,
-        false => BootstrapIcon::Play,
+        true => Bootstrap::Pause,
+        false => Bootstrap::Play,
     };
     let play_button = button(text(icon_to_string(icon)).font(ICON_FONT).size(25))
         .style(button::text)
         .on_press(Message::TogglePlayer);
 
-    let mut vol_icon: BootstrapIcon;
+    let mut vol_icon: Bootstrap;
     let vol = app.player.volume;
     if vol == 0.0 {
-        vol_icon = BootstrapIcon::VolumeMute;
+        vol_icon = Bootstrap::VolumeMute;
     } else if vol < 0.3 {
-        vol_icon = BootstrapIcon::VolumeOff;
+        vol_icon = Bootstrap::VolumeOff;
     } else if vol < 1.0 {
-        vol_icon = BootstrapIcon::VolumeDown;
+        vol_icon = Bootstrap::VolumeDown;
     } else {
-        vol_icon = BootstrapIcon::VolumeUp;
+        vol_icon = Bootstrap::VolumeUp;
     }
 
     let vol_slider = slider(
