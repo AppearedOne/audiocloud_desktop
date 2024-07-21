@@ -1,16 +1,14 @@
 use audiocloud_lib::*;
-use reqwest::Client;
-use std::any::Any;
-use std::fs::{self, File};
-use std::io;
+use reqwest::blocking::Client;
+use std::fs::{self};
 
 use crate::helpers;
 
 pub async fn check_connection(ip: String) -> bool {
     let client = Client::new();
-    let response = client.get(ip).send().await;
+    let response = client.get(ip).send();
     match response {
-        Ok(val) => match val.text().await {
+        Ok(val) => match val.text() {
             Ok(_) => {
                 return true;
             }
@@ -25,10 +23,8 @@ pub async fn get_result(params: SearchParams, path: String) -> SearchResult {
         .post(path + "search")
         .json(&params)
         .send()
-        .await
         .expect("Couldnt do reqwest")
         .text()
-        .await
         .unwrap();
 
     let out: SearchResult = serde_json::from_str(&response).expect("Couldnt parse response");
@@ -46,9 +42,8 @@ pub async fn get_editor_audio(
     let response = client
         .get(url)
         .send()
-        .await
         .expect("Couldnt send file get request");
-    let body = response.bytes().await.expect("body invalid");
+    let body = response.bytes().expect("body invalid");
     let _ = std::fs::write(tempaudio_path, &body);
     (sample, String::from(tempaudio_path))
 }
@@ -61,9 +56,8 @@ pub async fn get_temp_audio(server_url: String, file_path: String) -> String {
     let response = client
         .get(url)
         .send()
-        .await
         .expect("Couldnt send file get request");
-    let body = response.bytes().await.expect("body invalid");
+    let body = response.bytes().expect("body invalid");
     let _ = std::fs::write(tempaudio_path, &body);
     String::from(tempaudio_path)
 }
@@ -74,10 +68,8 @@ pub async fn get_packs_meta(server_url: String) -> Vec<PackInfo> {
     let response = client
         .get(url)
         .send()
-        .await
         .expect("Couldnt perform request")
         .text()
-        .await
         .expect("couldnt get text from response");
     print!("{}", response);
     let out: Vec<PackInfo> = serde_json::from_str(&response).expect("Couldn't convert json");
@@ -97,9 +89,8 @@ pub async fn dl_sample(server_url: String, file_path: String) -> String {
     let response = client
         .get(url)
         .send()
-        .await
         .expect("Couldnt send file get request");
-    let body = response.bytes().await.expect("body invalid");
+    let body = response.bytes().expect("body invalid");
     let _ = std::fs::write(path, &body);
     file_path
 }

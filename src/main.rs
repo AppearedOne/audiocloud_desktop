@@ -19,7 +19,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
 use std::time::Instant;
-use waveform::waveform;
 use widgets::player_widget;
 
 pub mod audio;
@@ -39,9 +38,9 @@ pub mod widgets;
 const ARRAYLEN: i32 = 800;
 const ICON_FONT_BYTES: &[u8] = include_bytes!("assets/icons.ttf");
 
-#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
-#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
-async fn main() -> iced::Result {
+//#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
+//#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
+fn main() -> iced::Result {
     iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(ICON_FONT_BYTES)
