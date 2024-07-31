@@ -6,7 +6,7 @@ use iced::widget::{
     scrollable, slider, text, text_input,
 };
 use iced::{
-    alignment, Alignment, Command, Element, Executor, Font, Length, Padding, Subscription, Theme,
+    alignment, Alignment, Element, Executor, Font, Length, Padding, Subscription, Task, Theme,
 };
 use std::ops::RangeInclusive;
 use std::time::Instant;
@@ -36,7 +36,7 @@ pub fn player_widget(app: &AudioCloud) -> Element<Message> {
         .style(button::text)
         .on_press(Message::TogglePlayer);
 
-    let mut vol_icon: Bootstrap;
+    let vol_icon: Bootstrap;
     let vol = app.player.volume;
     if vol == 0.0 {
         vol_icon = Bootstrap::VolumeMute;
@@ -63,7 +63,7 @@ pub fn player_widget(app: &AudioCloud) -> Element<Message> {
         text(icon_to_string(vol_icon)).font(ICON_FONT).size(20),
         vol_slider,
     ]
-    .align_items(Alignment::Center)
+    .align_y(Alignment::Center)
     .spacing(20);
     container(column![
         horizontal_rule(20).style(|theme: &Theme| rule::Style {

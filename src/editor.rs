@@ -9,7 +9,7 @@ use iced::widget::{
 };
 use iced::Color;
 use iced::Element;
-use iced::{Alignment, Command, Padding, Subscription, Theme};
+use iced::{Alignment, Padding, Subscription, Task, Theme};
 
 pub struct Editor {
     pub sample: Sample,
@@ -42,11 +42,11 @@ pub fn view(app: &AudioCloud) -> Element<Message> {
     let status_text = text(&app.status_message).style(themes::text_fg);
     let settings = button(text(icon_to_string(Bootstrap::HouseFill)).font(ICON_FONT))
         .on_press(Message::GoView(ViewControl::Main))
-        .padding([5, 10, 5, 10]);
+        .padding([5, 10]);
     let status_bar = container(
         row![horizontal_space(), status_text, settings]
             .spacing(10)
-            .align_items(Alignment::Center),
+            .align_y(Alignment::Center),
     );
     let wav = waveform(app.editor.wav).color(Color::WHITE);
     column![status_bar, text("ah"), wav].into()

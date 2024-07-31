@@ -11,7 +11,7 @@ use iced::widget::{
     text_input, tooltip, vertical_space,
 };
 use iced::window;
-use iced::{alignment, Alignment, Command, Element, Font, Length, Padding, Subscription, Theme};
+use iced::{alignment, Alignment, Element, Font, Length, Padding, Subscription, Task, Theme};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rodio::{source::Source, Decoder};
@@ -41,19 +41,22 @@ const ICON_FONT_BYTES: &[u8] = include_bytes!("assets/icons.ttf");
 //#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
 //#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
 fn main() -> iced::Result {
-    iced::program(AudioCloud::title, AudioCloud::update, AudioCloud::view)
+    iced::application(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(ICON_FONT_BYTES)
         .subscription(AudioCloud::subscription)
-        .load(|| {
-            Command::perform(
-                settings::load_from_file("settings.json"),
-                Message::SettingsLoaded,
-            )
-        })
         .font(ICON_FONT_BYTES)
         .exit_on_close_request(false)
-        .run()
+        .transparent(true)
+        .run_with(|| {
+            (
+                AudioCloud::new().0,
+                Task::perform(
+                    settings::load_from_file("settings.json"),
+                    Message::SettingsLoaded,
+                ),
+            )
+        })
 }
 
 pub struct AudioCloud {
@@ -138,29 +141,29 @@ pub enum Message {
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
 
-fn perform_search(params: SearchParams, path: String) -> Command<Message> {
-    Command::perform(
+fn perform_search(params: SearchParams, path: String) -> Task<Message> {
+    Task::perform(
         request::get_result(params, path),
         Message::SearchResultRecived,
     )
 }
-fn send_file_preview_dl(server_url: String, path: String) -> Command<Message> {
-    Command::perform(
+fn send_file_preview_dl(server_url: String, path: String) -> Task<Message> {
+    Task::perform(
         request::get_temp_audio(server_url, path),
         Message::TempAudioLoaded,
     )
 }
-fn send_file_dl(server_url: String, path: String) -> Command<Message> {
-    Command::perform(
+fn send_file_dl(server_url: String, path: String) -> Task<Message> {
+    Task::perform(
         request::dl_sample(server_url, path),
         Message::SampleAudioDownloaded,
     )
 }
 
 impl AudioCloud {
-    fn create_request_command(&self, input: String) -> Command<Message> {
+    fn create_request_command(&self, input: String) -> Task<Message> {
         if input.is_empty() || input.eq("-") {
-            return Command::none();
+            return Task::none();
         }
 
         let sample_type_filter = if self.show_loops == self.show_oneshots {
@@ -183,7 +186,7 @@ impl AudioCloud {
         };
         return perform_search(params, self.settings.server_url.clone());
     }
-    fn new() -> (Self, Command<Message>) {
+    fn new() -> (Self, Task<Message>) {
         (
             Self {
                 input: String::from(""),
@@ -219,7 +222,7 @@ impl AudioCloud {
                 },
                 editor: Editor::empty(),
             },
-            Command::none(),
+            Task::none(),
         )
     }
 
@@ -231,27 +234,27 @@ impl AudioCloud {
         event::listen().map(Message::EventOccurred)
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::EventOccurred(event) => {
-                if let Event::Window(_id, window::Event::CloseRequested) = event {
+                if let Event::Window(window::Event::CloseRequested) = event {
                     let mut set = self.settings.clone();
                     match &self.selected_theme {
                         Some(theme) => set.theme = theme.to_string(),
                         None => set.theme = "Dark".to_string(),
                     }
 
-                    return Command::perform(
+                    return Task::perform(
                         settings::save_to_file(set, "settings.json"),
                         Message::Exit,
                     );
                 } else {
-                    return Command::none();
+                    return Task::none();
                 }
             }
             Message::Exit(_) => {
                 println!("Saved!");
-                return window::close(window::Id::MAIN);
+                return window::get_latest().and_then(window::close);
             }
             Message::RecivedHandle => {}
             Message::InputChanged(val) => {
@@ -275,7 +278,7 @@ impl AudioCloud {
                 if !self.settings.server_url.ends_with("/") {
                     self.settings.server_url.push('/');
                 }
-                return Command::perform(
+                return Task::perform(
                     request::check_connection(self.settings.server_url.clone()),
                     Message::ServerStatusUpdate,
                 );
@@ -357,7 +360,7 @@ impl AudioCloud {
                 self.show_all_favourites = !self.show_all_favourites;
             }
             Message::LoadSettings => {
-                return Command::perform(
+                return Task::perform(
                     settings::load_from_file("settings.json"),
                     Message::SettingsLoaded,
                 )
@@ -366,7 +369,7 @@ impl AudioCloud {
                 self.settings = val;
                 self.selected_theme = themes::string_to_theme(&self.settings.clone().theme);
                 self.status_message = "Loaded settings ".to_string();
-                return Command::perform(
+                return Task::perform(
                     request::get_packs_meta(self.settings.server_url.clone()),
                     Message::PacksMetaRecived,
                 );
@@ -382,7 +385,7 @@ impl AudioCloud {
                     None => set.theme = "Dark".to_string(),
                 }
 
-                return Command::perform(
+                return Task::perform(
                     settings::save_to_file(set, "settings.json"),
                     Message::SettingsSaved,
                 );
@@ -437,7 +440,7 @@ impl AudioCloud {
                     let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
                     ctx.set_files(filepath).expect("couldnt set to clipboard");
                     self.status_message = String::from("Copied sample ");
-                    return Command::none();
+                    return Task::none();
                 }
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -459,13 +462,13 @@ impl AudioCloud {
                     None => set.theme = "Dark".to_string(),
                 }
 
-                return Command::perform(
+                return Task::perform(
                     settings::save_to_file(set, "settings.json"),
                     Message::SettingsSaved,
                 );
             }
             Message::ResetCache => {
-                return Command::perform(helpers::clear_cached(), Message::CacheReset);
+                return Task::perform(helpers::clear_cached(), Message::CacheReset);
             }
             Message::CacheReset(val) => {
                 self.settings.dl_samples_hash = val;
@@ -478,7 +481,7 @@ impl AudioCloud {
                 None => (),
             },
         }
-        Command::none()
+        Task::none()
     }
 
     fn view(&self) -> Element<Message> {
@@ -487,23 +490,24 @@ impl AudioCloud {
             ViewControl::Main => {
                 let settings = button(text(icon_to_string(Bootstrap::GearFill)).font(ICON_FONT))
                     .on_press(Message::SettingsButtonToggled)
-                    .padding([5, 10, 5, 10]);
+                    .padding([5, 10]);
                 let status_bar = container(
                     row![horizontal_space(), status_text, settings]
                         .spacing(10)
-                        .align_items(Alignment::Center),
+                        .align_y(Alignment::Center),
                 );
 
                 let title = text("Audiocloud")
                     .width(Length::Fill)
                     .size(35)
-                    .horizontal_alignment(alignment::Horizontal::Center);
+                    .align_x(alignment::Horizontal::Center);
 
                 let input_text = text_input("Some query...", &self.input)
                     .on_input(Message::InputChanged)
                     .on_submit(Message::CreateTask)
                     .width(Length::FillPortion(6))
-                    .size(30);
+                    .size(30)
+                    .style(themes::searchbar);
                 let input = container(input_text).padding(Padding {
                     top: 5.0,
                     bottom: 0.0,
@@ -560,7 +564,7 @@ impl AudioCloud {
                     shuffle_order,
                     fav_all
                 ]
-                .align_items(Alignment::Center)
+                .align_y(Alignment::Center)
                 .padding(Padding {
                     top: 0.0,
                     right: 20.0,
@@ -673,7 +677,7 @@ impl AudioCloud {
                                     fav_button,
                                     edit_button,
                                 ]
-                                .align_items(Alignment::Center),
+                                .align_y(Alignment::Center),
                             );
                             result_row =
                                 result_row.push(sample_entry.align_y(alignment::Vertical::Center));

@@ -1228,8 +1228,8 @@ pub enum Bootstrap {
     Columns,
     /// ColumnsGap 
     ColumnsGap,
-    /// Command 
-    Command,
+    /// Task 
+    Task,
     /// Compass 
     Compass,
     /// CompassFill 
@@ -4722,7 +4722,7 @@ pub const fn icon_to_char(icon: Bootstrap) -> char {
         Bootstrap::CollectionPlayFill => '\u{f2ca}',
         Bootstrap::Columns => '\u{f2ce}',
         Bootstrap::ColumnsGap => '\u{f2cd}',
-        Bootstrap::Command => '\u{f2cf}',
+        Bootstrap::Task => '\u{f2cf}',
         Bootstrap::Compass => '\u{f2d1}',
         Bootstrap::CompassFill => '\u{f2d0}',
         Bootstrap::Cone => '\u{f2d3}',

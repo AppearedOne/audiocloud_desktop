@@ -17,7 +17,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
         .padding([5, 10, 5, 10]);
     let status_bar = row![horizontal_space(), status_text, settings_button]
         .spacing(10)
-        .align_items(Alignment::Center);
+        .align_y(Alignment::Center);
 
     let title = text("Settings")
         .width(Length::Fill)
@@ -52,7 +52,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
             }),
             connection_status,
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .padding(20)
         .spacing(15),
         row![
@@ -64,7 +64,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
                 Message::ThemeSelected
             )
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .padding(20)
         .spacing(15),
         row![
@@ -76,7 +76,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
                 Message::MaxRequestsChanged
             )
         ]
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .spacing(15)
         .padding(20),
         row![
@@ -92,7 +92,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
                 .on_press(Message::ResetCache)
         ]
         .spacing(15)
-        .align_items(Alignment::Center)
+        .align_y(Alignment::Center)
         .padding(20),
     ];
 

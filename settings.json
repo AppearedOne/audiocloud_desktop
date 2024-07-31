@@ -1,5 +1,5 @@
 {
-  "theme": "Gruvbox Dark",
+  "theme": "Dark",
   "server_url": "http://192.168.1.51:4040/",
   "max_results": 100,
   "favourite_samples": [

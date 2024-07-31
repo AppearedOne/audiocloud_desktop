@@ -6,8 +6,8 @@ use iced::widget::{
     Scrollable,
 };
 use iced::{
-    alignment, executor, Alignment, Border, Color, Command, Element, Executor, Font, Length,
-    Padding, Theme,
+    alignment, executor, Alignment, Background, Border, Color, Element, Executor, Font, Length,
+    Padding, Task, Theme,
 };
 
 pub fn text_fg(theme: &Theme) -> text::Style {
@@ -23,6 +23,20 @@ pub fn string_to_theme(theme_str: &str) -> Option<Theme> {
         }
     }
     None
+}
+
+pub fn searchbar(
+    theme: &Theme,
+    status: iced::widget::text_input::Status,
+) -> iced::widget::text_input::Style {
+    let palette = theme.extended_palette();
+    let mut style = text_input::default(theme, status);
+    style.border = Border {
+        color: palette.primary.strong.color,
+        width: 0.0,
+        radius: Radius::from(0.0),
+    };
+    style
 }
 
 pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
@@ -104,6 +118,6 @@ pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
 pub fn round_button(theme: &Theme, status: iced::widget::button::Status) -> button::Style {
     let mut style = button::primary(theme, status);
     let radius = 10.0;
-    style.border.radius = Radius::from([radius, radius, radius, radius]);
+    style.border.radius = Radius::from(radius);
     style
 }
