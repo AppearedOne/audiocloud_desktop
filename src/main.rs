@@ -2,7 +2,7 @@ use audiocloud_lib::*;
 #[cfg(not(target_arch = "wasm32"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
 
-use editor::Editor;
+use editor::{Editor, EditorEvent};
 use helpers::hash_sample;
 use iced::event::{self, Event};
 use iced::widget::tooltip::Position;
@@ -14,7 +14,9 @@ use iced::window;
 use iced::{alignment, Alignment, Element, Font, Length, Padding, Subscription, Task, Theme};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use request::get_editor_audio;
 use rodio::{source::Source, Decoder};
+use settings::{settings_changed, SettingsChanged};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
@@ -35,12 +37,12 @@ pub mod views;
 pub mod waveform;
 pub mod widgets;
 
-const ARRAYLEN: i32 = 800;
+const ARRAYLEN: i32 = 1200;
 const ICON_FONT_BYTES: &[u8] = include_bytes!("assets/icons.ttf");
 
-//#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
-//#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
-fn main() -> iced::Result {
+#[cfg_attr(target_arch = "wasm32", tokio::main(flavor = "current_thread"))]
+#[cfg_attr(not(target_arch = "wasm32"), tokio::main)]
+async fn main() -> iced::Result {
     iced::application(AudioCloud::title, AudioCloud::update, AudioCloud::view)
         .theme(AudioCloud::theme)
         .font(ICON_FONT_BYTES)
@@ -91,13 +93,15 @@ pub enum ViewControl {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Nothing(()),
     EventOccurred(Event),
     Exit(()),
     RecivedHandle,
 
     GoView(ViewControl),
     EditorSessionDL(Sample),
-    EditorSession(Sample, String),
+    EditorSession((Sample, String)),
+    Editor(EditorEvent),
 
     CopySample(String),
     DragPerformed,
@@ -137,6 +141,8 @@ pub enum Message {
 
     ToggleFavourite(Sample),
     ShuffleResults,
+
+    Settings(SettingsChanged),
 }
 
 const ICON_FONT: Font = Font::with_name("bootstrap-icons");
@@ -206,6 +212,7 @@ impl AudioCloud {
                 pack_meta: vec![],
 
                 settings: settings::Settings {
+                    searchbar_gradient: true,
                     max_results: 50,
                     server_url: "http://127.0.0.1:4040/".to_string(),
                     theme: "Dark".to_string(),
@@ -236,6 +243,9 @@ impl AudioCloud {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Nothing(_) => (),
+            Message::Editor(event) => return editor::editor_event(self, event),
+            Message::Settings(val) => return settings_changed(self, val),
             Message::EventOccurred(event) => {
                 if let Event::Window(window::Event::CloseRequested) = event {
                     let mut set = self.settings.clone();
@@ -289,11 +299,20 @@ impl AudioCloud {
 
             Message::PlaySample(path, name) => {
                 self.player.name = name;
+                println!("{}", path);
                 return send_file_preview_dl(self.settings.server_url.clone(), path);
             }
             Message::TempAudioLoaded(path) => {
                 let file = BufReader::new(File::open(&path).expect("Couldnt open file"));
-                let source = Decoder::new(file).expect("Couldnt build source from file");
+                let source_file = Decoder::new(file);
+                let source = match source_file {
+                    Err(_) => {
+                        self.status_message = "Couldnt open downloaded file ".to_string();
+                        return Task::none();
+                    }
+                    Ok(decoder) => decoder,
+                };
+                //let source_r = source.buffered().reverb(Duration::from_millis(40), 0.7);
                 match &self.audio_devices {
                     Some(devs) => {
                         if !devs.sink.empty() {
@@ -404,7 +423,7 @@ impl AudioCloud {
                 self.settings.max_results = val;
             }
             Message::DownloadSample(path) => {
-                return send_file_dl(self.settings.server_url.clone(), path)
+                return send_file_dl(self.settings.server_url.clone(), path);
             }
             Message::SampleAudioDownloaded(path) => {
                 self.settings.add_dl_entry(&path);
@@ -439,7 +458,7 @@ impl AudioCloud {
                 {
                     let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
                     ctx.set_files(filepath).expect("couldnt set to clipboard");
-                    self.status_message = String::from("Copied sample ");
+                    self.status_message = String::from("Copied sample");
                     return Task::none();
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -449,13 +468,7 @@ impl AudioCloud {
             }
             Message::DragPerformed => {}
             Message::ResetSettings => {
-                self.settings = settings::Settings {
-                    max_results: 50,
-                    server_url: "http://127.0.0.1:4040/".to_string(),
-                    theme: "Dark".to_string(),
-                    favourite_samples: vec![],
-                    dl_samples_hash: vec![],
-                };
+                self.settings = settings::Settings::default();
                 let mut set = self.settings.clone();
                 match &self.selected_theme {
                     Some(theme) => set.theme = theme.to_string(),
@@ -474,8 +487,28 @@ impl AudioCloud {
                 self.settings.dl_samples_hash = val;
             }
             Message::GoView(v) => self.view = v,
-            Message::EditorSessionDL(sample) => {}
-            Message::EditorSession(sample, audio) => {}
+            Message::EditorSessionDL(sample) => {
+                return Task::perform(
+                    get_editor_audio(sample, self.settings.server_url.clone()),
+                    Message::EditorSession,
+                )
+            }
+            Message::EditorSession((nsample, _path)) => {
+                self.editor.sample = nsample;
+                self.editor.lowpass = None;
+                self.editor.highpass = None;
+                self.status_message = "Loading editor...".to_string();
+                self.view = ViewControl::Editor;
+
+                return Task::perform(
+                    editor::load_editor_audio(self.editor.audio.clone()),
+                    Message::Nothing,
+                )
+                .chain(Task::perform(
+                    waveform::get_waveform_tk(self.editor.audio.clone()),
+                    |val| Message::Editor(EditorEvent::WaveformReloaded(val)),
+                ));
+            }
             Message::ShuffleResults => match &mut self.results {
                 Some(res) => res.samples.shuffle(&mut thread_rng()),
                 None => (),
@@ -497,23 +530,32 @@ impl AudioCloud {
                         .align_y(Alignment::Center),
                 );
 
-                let title = text("Audiocloud")
-                    .width(Length::Fill)
-                    .size(35)
-                    .align_x(alignment::Horizontal::Center);
+                /*let title = text("Audiocloud")
+                .width(Length::Fill)
+                .size(35)
+                .align_x(alignment::Horizontal::Center);*/
 
                 let input_text = text_input("Some query...", &self.input)
                     .on_input(Message::InputChanged)
                     .on_submit(Message::CreateTask)
                     .width(Length::FillPortion(6))
                     .size(30)
-                    .style(themes::searchbar);
-                let input = container(input_text).padding(Padding {
-                    top: 5.0,
-                    bottom: 0.0,
-                    left: 50.0,
-                    right: 50.0,
-                });
+                    .style(themes::searchbar_text_only);
+
+                let inputstyle = if self.settings.searchbar_gradient {
+                    themes::container_focus
+                } else {
+                    container::transparent
+                };
+                let input = container(input_text)
+                    .padding(Padding {
+                        top: 5.0,
+                        bottom: 0.0,
+                        left: 50.0,
+                        right: 50.0,
+                    })
+                    .style(inputstyle)
+                    .align_y(Alignment::Center);
 
                 let fav_all_text = match self.show_all_favourites {
                     true => text(icon_to_string(Bootstrap::StarFill)).style(|theme: &Theme| {
@@ -592,7 +634,9 @@ impl AudioCloud {
                             if self.show_only_favourites && !self.settings.is_favourite(sample) {
                                 continue;
                             }
-                            let name = helpers::remove_brackets(&sample.name.replace(".wav", ""));
+                            let name = helpers::remove_brackets(
+                                &sample.name.replace(".wav", "").replace("_", " "),
+                            );
 
                             let type_text = match sample.sampletype {
                                 SampleType::OneShot => {
@@ -608,7 +652,7 @@ impl AudioCloud {
                                         text(icon_to_string(Bootstrap::ArrowRepeat))
                                             .font(ICON_FONT)
                                             .style(themes::text_fg),
-                                        text(" Loop ").style(themes::text_fg),
+                                        text(" Loop").style(themes::text_fg),
                                         text(tempo.to_string()).style(themes::text_fg).size(10),
                                         text("bpm").size(10).style(themes::text_fg),
                                     ]
@@ -702,7 +746,7 @@ impl AudioCloud {
                 column![
                     status_bar,
                     vertical_space().height(Length::Fixed(20.0)),
-                    title,
+                    //title,
                     spacer,
                     input,
                     spacer2,

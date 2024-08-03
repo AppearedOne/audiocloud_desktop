@@ -4,25 +4,41 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
 use iced::mouse;
 use iced::{Border, Color, Element, Length, Rectangle, Size};
+use std::sync::{Arc, RwLock};
 pub struct Waveform {
     color: Color,
     vals: [f32; ARRAYLEN as usize],
 }
 
-pub fn get_waveform(samples_audio: Vec<f32>) -> [f32; ARRAYLEN as usize] {
-    let mut samples = samples_audio.clone();
+pub fn get_waveform(mut samples_audio: Vec<f32>) -> [f32; ARRAYLEN as usize] {
     let mut arr: [f32; ARRAYLEN as usize] = [0.0; ARRAYLEN as usize];
-    let divider = samples.len() / ARRAYLEN as usize;
+    let divider = samples_audio.len() / ARRAYLEN as usize;
     for i in 0..ARRAYLEN {
-        let sum: f32 = samples.drain(0..divider as usize).map(|v| v * v).sum();
+        let sum: f32 = samples_audio
+            .drain(0..divider as usize)
+            .map(|v| v * v)
+            .sum();
         let average = sum / divider as f32;
         arr[i as usize] = average.sqrt();
     }
-
-    return arr;
+    arr
 }
-pub async fn get_waveform_tk(samples_audio: Vec<f32>) -> [f32; ARRAYLEN as usize] {
-    get_waveform(samples_audio)
+
+pub fn get_waveform_readonly(samples_audio: Arc<RwLock<Vec<f32>>>) -> [f32; ARRAYLEN as usize] {
+    let audiodata = samples_audio.read().expect("Couldnt read audiodata");
+    let mut arr: [f32; ARRAYLEN as usize] = [0.0; ARRAYLEN as usize];
+    let divider = audiodata.len() / ARRAYLEN as usize;
+    for i in 0..ARRAYLEN {
+        let start = (i * divider as i32) as usize;
+        let end = ((i + 1) * divider as i32) as usize;
+        let sum: f32 = audiodata[start..end].iter().map(|&v| v * v).sum();
+        let average = sum / divider as f32;
+        arr[i as usize] = average.sqrt();
+    }
+    arr
+}
+pub async fn get_waveform_tk(samples_audio: Arc<RwLock<Vec<f32>>>) -> [f32; ARRAYLEN as usize] {
+    get_waveform_readonly(samples_audio)
 }
 
 impl Waveform {

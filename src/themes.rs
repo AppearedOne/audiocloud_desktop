@@ -1,6 +1,5 @@
-use std::any;
-
 use iced::border::Radius;
+use iced::gradient;
 use iced::widget::{
     button, column, container, horizontal_space, row, scrollable, scrollable::*, text, text_input,
     Scrollable,
@@ -16,6 +15,12 @@ pub fn text_fg(theme: &Theme) -> text::Style {
     }
 }
 
+pub fn text_fg_succes(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(theme.extended_palette().success.strong.color),
+    }
+}
+
 pub fn string_to_theme(theme_str: &str) -> Option<Theme> {
     for theme_type in Theme::ALL {
         if theme_type.to_string() == theme_str {
@@ -24,45 +29,61 @@ pub fn string_to_theme(theme_str: &str) -> Option<Theme> {
     }
     None
 }
+pub fn container_front(theme: &Theme) -> iced::widget::container::Style {
+    container::transparent(theme).border(Border {
+        color: theme.extended_palette().primary.base.color,
+        width: 2.0,
+        radius: Radius::from(4.0),
+    })
+}
+pub fn container_focus(theme: &Theme) -> iced::widget::container::Style {
+    let color1 = theme.extended_palette().primary.base.color;
+    let color2 = theme.extended_palette().background.base.color;
+    let gradient_bg = gradient::Linear::new(90)
+        .add_stop(0.1, color2)
+        .add_stop(1.0, color1);
+    gradient_bg.into()
+}
 
-pub fn searchbar(
+pub fn searchbar_text_only(
     theme: &Theme,
     status: iced::widget::text_input::Status,
 ) -> iced::widget::text_input::Style {
     let palette = theme.extended_palette();
     let mut style = text_input::default(theme, status);
     style.border = Border {
-        color: palette.primary.strong.color,
+        color: palette.primary.strong.text,
         width: 0.0,
-        radius: Radius::from(0.0),
+        radius: Radius::from(2.0),
     };
+    style.background = Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.0));
     style
 }
 
 pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
     let palette = theme.extended_palette();
 
-    let scrollbar = Scrollbar {
+    let scrollbar = Rail {
         background: None,
-        border: Border::rounded(2),
+        border: Border::rounded(Border::default(), 2),
         scroller: Scroller {
             color: palette.background.strong.color,
-            border: Border::rounded(2),
+            border: Border::rounded(Border::default(), 2),
         },
     };
 
     match status {
         Status::Active => Style {
             container: container::Style::default(),
-            vertical_scrollbar: scrollbar,
-            horizontal_scrollbar: scrollbar,
+            vertical_rail: scrollbar,
+            horizontal_rail: scrollbar,
             gap: None,
         },
         Status::Hovered {
             is_horizontal_scrollbar_hovered,
             is_vertical_scrollbar_hovered,
         } => {
-            let hovered_scrollbar = Scrollbar {
+            let hovered_scrollbar = Rail {
                 scroller: Scroller {
                     color: palette.primary.strong.color,
                     ..scrollbar.scroller
@@ -72,12 +93,12 @@ pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
 
             Style {
                 container: container::Style::default(),
-                vertical_scrollbar: if is_vertical_scrollbar_hovered {
+                vertical_rail: if is_vertical_scrollbar_hovered {
                     hovered_scrollbar
                 } else {
                     scrollbar
                 },
-                horizontal_scrollbar: if is_horizontal_scrollbar_hovered {
+                horizontal_rail: if is_horizontal_scrollbar_hovered {
                     hovered_scrollbar
                 } else {
                     scrollbar
@@ -89,7 +110,7 @@ pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
             is_horizontal_scrollbar_dragged,
             is_vertical_scrollbar_dragged,
         } => {
-            let dragged_scrollbar = Scrollbar {
+            let dragged_scrollbar = Rail {
                 scroller: Scroller {
                     color: palette.primary.base.color,
                     ..scrollbar.scroller
@@ -99,12 +120,12 @@ pub fn scrollbar_invis(theme: &Theme, status: Status) -> Style {
 
             Style {
                 container: container::Style::default(),
-                vertical_scrollbar: if is_vertical_scrollbar_dragged {
+                vertical_rail: if is_vertical_scrollbar_dragged {
                     dragged_scrollbar
                 } else {
                     scrollbar
                 },
-                horizontal_scrollbar: if is_horizontal_scrollbar_dragged {
+                horizontal_rail: if is_horizontal_scrollbar_dragged {
                     dragged_scrollbar
                 } else {
                     scrollbar

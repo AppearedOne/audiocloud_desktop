@@ -1,10 +1,11 @@
 use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_space, row, scrollable, slider,
-    text, text_input,
+    text, text_input, toggler,
 };
 use iced::{alignment, Alignment, Element, Length, Padding, Theme};
 
 use crate::bootstrap::*;
+use crate::settings;
 use crate::themes;
 use crate::AudioCloud;
 use crate::Message;
@@ -14,7 +15,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
     let status_text = text(&app.status_message).style(themes::text_fg);
     let settings_button = button(text(icon_to_string(Bootstrap::XLg)).font(ICON_FONT))
         .on_press(Message::SettingsButtonToggled)
-        .padding([5, 10, 5, 10]);
+        .padding([5, 10]);
     let status_bar = row![horizontal_space(), status_text, settings_button]
         .spacing(10)
         .align_y(Alignment::Center);
@@ -22,7 +23,7 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
     let title = text("Settings")
         .width(Length::Fill)
         .size(35)
-        .horizontal_alignment(alignment::Horizontal::Center);
+        .align_x(alignment::Horizontal::Center);
 
     let connection_status = match app.server_status {
         Some(status) => match status {
@@ -62,6 +63,11 @@ pub fn settings(app: &AudioCloud) -> Element<Message> {
                 "No theme selected",
                 app.selected_theme.as_ref(),
                 Message::ThemeSelected
+            ),
+            toggler(
+                String::from("Searchbar gradient:"),
+                app.settings.searchbar_gradient,
+                |val: bool| { Message::Settings(settings::SettingsChanged::ShowGradient(val)) }
             )
         ]
         .align_y(Alignment::Center)
