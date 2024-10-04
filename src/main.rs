@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
 use audiocloud_lib::*;
 #[cfg(not(target_arch = "wasm32"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
