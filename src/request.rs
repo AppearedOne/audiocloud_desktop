@@ -2,6 +2,7 @@ use audiocloud_lib::*;
 use reqwest::Client;
 use std::fs::{self};
 
+use crate::error::*;
 use crate::helpers;
 
 pub async fn check_connection(ip: String) -> bool {
@@ -63,19 +64,23 @@ pub async fn get_temp_audio(server_url: String, file_path: String) -> String {
     String::from(tempaudio_path)
 }
 
-pub async fn get_packs_meta(server_url: String) -> Vec<PackInfo> {
+pub async fn get_packs_meta(server_url: String) -> Result<Vec<PackInfo>, Error> {
     let client = Client::new();
     let url = server_url + "packs";
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .expect("Didnt get response to pack info request")
-        .text()
-        .await
-        .expect("couldnt get text from response");
-    let out: Vec<PackInfo> = serde_json::from_str(&response).expect("Couldn't convert json");
-    out
+    let response_s: reqwest::Response = match client.get(url).send().await {
+        Err(_) => return Err(Error::new(ErrorType::Connection)),
+        Ok(val) => val,
+    };
+
+    let response = match response_s.text().await {
+        Err(_) => return Err(Error::new(ErrorType::Parse)),
+        Ok(val) => val,
+    };
+    let out: Vec<PackInfo> = match serde_json::from_str(&response) {
+        Err(_) => return Err(Error::new(ErrorType::JSON)),
+        Ok(val) => val,
+    };
+    Ok(out)
 }
 
 pub async fn dl_sample(server_url: String, file_path: String) -> String {
@@ -98,3 +103,5 @@ pub async fn dl_sample(server_url: String, file_path: String) -> String {
     let _ = std::fs::write(path, &body);
     file_path
 }
+
+pub async fn nothing() {}

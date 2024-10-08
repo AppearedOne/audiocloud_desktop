@@ -1,5 +1,5 @@
-use crate::bootstrap::*;
-use crate::{AudioCloud, Message, ICON_FONT};
+use crate::bootstrap::{ICON_FONT, *};
+use crate::{AudioCloud, Message};
 use iced::border::Radius;
 use iced::widget::{
     button, checkbox, column, combo_box, container, horizontal_rule, horizontal_space, row, rule,
@@ -25,6 +25,12 @@ pub fn padding_now(num: i32) -> Padding {
         bottom: 0.0,
         left: num as f32,
     }
+}
+
+pub fn icon_text(icon: Bootstrap, t: &str) -> Element<Message> {
+    row![text(icon_to_string(icon)).font(ICON_FONT), text(t)]
+        .spacing(10)
+        .into()
 }
 
 pub fn player_widget(app: &AudioCloud) -> Element<Message> {

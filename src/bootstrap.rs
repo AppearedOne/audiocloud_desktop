@@ -7,7 +7,11 @@ use std::{
     string::String,
 };
 
-use iced::widget::{text, Text};
+use iced::font::Font;
+
+pub const ICON_FONT: Font = Font::with_name("bootstrap-icons");
+
+pub const ICON_FONT_BYTES: &[u8] = include_bytes!("assets/icons.ttf");
 
 /// Holds all glyphs of the Bootstrap font
 #[derive(Debug, Clone, Copy)]
