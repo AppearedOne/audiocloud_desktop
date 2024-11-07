@@ -72,7 +72,8 @@ pub fn editor_event(app: &mut AudioCloud, event: EditorEvent) -> Task<Message> {
         }
         EditorEvent::WaveformReloaded(val) => {
             app.editor.wav = val;
-            app.status_message = "Loaded Waveform ".to_string();
+            app.status
+                .set(crate::StatusBarLevel::Succes, "Loaded Waveform");
         }
         EditorEvent::PlaybackStart => {
             //let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -86,7 +87,7 @@ pub fn editor_event(app: &mut AudioCloud, event: EditorEvent) -> Task<Message> {
 //fn transport_bar() -> Element<Message> {}
 
 pub fn view(app: &AudioCloud) -> Element<Message> {
-    let status_text = text(&app.status_message).style(themes::text_fg);
+    let status_text = app.status.statusbar_text();
     let settings = button(text(icon_to_string(Bootstrap::HouseFill)).font(ICON_FONT))
         .on_press(Message::GoView(ViewControl::Main))
         .padding([5, 10]);

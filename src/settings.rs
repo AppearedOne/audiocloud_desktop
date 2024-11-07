@@ -144,7 +144,7 @@ impl Settings {
 }
 
 pub fn settings(app: &AudioCloud) -> Element<Message> {
-    let status_text = text(&app.status_message).style(themes::text_fg);
+    let status_text = app.status.statusbar_text();
     let settings_button = button(text(icon_to_string(Bootstrap::XLg)).font(ICON_FONT))
         .on_press(Message::SettingsButtonToggled)
         .padding([5, 10]);

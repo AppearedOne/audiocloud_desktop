@@ -12,7 +12,7 @@ use crate::{helpers, themes, widgets, AudioCloud, Message, SampleType};
 use crate::{overlay_anchor::anchored_overlay, widgets::*};
 
 pub fn searchview(app: &AudioCloud) -> Element<Message> {
-    let status_text = text(&app.status_message).style(themes::text_fg);
+    let status_text = app.status.statusbar_text();
     let settings = button(text(icon_to_string(Bootstrap::GearFill)).font(ICON_FONT))
         .on_press(Message::SettingsButtonToggled)
         .padding([5, 10]);
@@ -216,7 +216,7 @@ pub fn searchview(app: &AudioCloud) -> Element<Message> {
                         .on_press(Message::DownloadSample(sample.path.clone())),
                     true => button(dl_text.font(ICON_FONT).size(20))
                         .style(button::text)
-                        .on_press(Message::CopySample(sample.path.clone())),
+                        .on_press(Message::DragSample(sample.path.clone())),
                 };
 
                 let sample_entry = container(
@@ -286,7 +286,8 @@ pub fn search_update(message: SearchView, app: &mut AudioCloud) -> Task<Message>
             }
         }
         SearchView::GetPackIDS => {
-            app.status_message = "Gettings IDs...".to_string();
+            app.status
+                .set(crate::StatusBarLevel::Neutral, "Getting IDs");
             return Task::perform(
                 request::get_packs_meta(app.settings.server_url.clone()),
                 Message::PacksMetaRecived,

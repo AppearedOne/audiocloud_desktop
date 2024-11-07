@@ -15,6 +15,8 @@ pub enum ErrorType {
     Parse,
     Connection,
     JSON,
+    FileOpen,
+    FileSave,
 }
 
 impl fmt::Display for Error {

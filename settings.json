@@ -1,8 +1,9 @@
 {
-  "theme": "Gruvbox Dark",
+  "theme": "Catppuccin Frappé",
   "searchbar_gradient": true,
-  "server_url": "http://0.0.0.0:4040/",
-  "max_results": 50,
+  "searchview_title": "Spacing",
+  "server_url": "http://192.168.1.51:4040/",
+  "max_results": 16,
   "favourite_samples": [],
   "dl_samples_hash": []
 }

@@ -21,6 +21,7 @@ use rand::thread_rng;
 use request::get_editor_audio;
 use rodio::{source::Source, Decoder};
 use settings::{settings_changed, SettingsChanged};
+use status::*;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::*;
@@ -35,6 +36,7 @@ pub mod overlay_anchor;
 pub mod request;
 pub mod search;
 pub mod settings;
+pub mod status;
 pub mod themes;
 pub mod waveform;
 pub mod widgets;
@@ -78,7 +80,7 @@ pub struct AudioCloud {
     pack_meta: Vec<PackInfo>,
 
     settings: settings::Settings,
-    status_message: String,
+    status: StatusBar,
 
     player: widgets::Player,
 
@@ -107,12 +109,13 @@ pub enum Message {
     SearchView(search::SearchView),
 
     CopySample(String),
+    DragSample(String),
     DragPerformed,
 
     InputChanged(String),
     CreateTask,
     SettingsButtonToggled,
-    SearchResultRecived(SearchResult),
+    SearchResultRecived(Result<SearchResult, error::Error>),
     ServerStatusUpdate(bool),
     ServerUrlSubmited(String),
 
@@ -217,7 +220,7 @@ impl AudioCloud {
 
                 settings_state: settings::SettingsState::new(),
                 settings: settings::Settings::default(),
-                status_message: String::from("idle... "),
+                status: StatusBar::new(),
 
                 player: widgets::Player {
                     is_playing: false,
@@ -275,7 +278,15 @@ impl AudioCloud {
                 ViewControl::Settings => self.view = ViewControl::Main,
                 _ => self.view = ViewControl::Settings,
             },
-            Message::SearchResultRecived(val) => {
+            Message::SearchResultRecived(v) => {
+                let val = match v {
+                    Err(_) => {
+                        self.status.set(StatusBarLevel::Danger, "Failed to connect");
+                        return Task::none();
+                    }
+
+                    Ok(val) => val,
+                };
                 if val.samples.len() > 0 {
                     self.results = Some(val)
                 } else if !self.search_options.show_all_favourites {
@@ -306,7 +317,8 @@ impl AudioCloud {
                 let source_file = Decoder::new(file);
                 let source = match source_file {
                     Err(_) => {
-                        self.status_message = "Couldnt open downloaded file ".to_string();
+                        self.status
+                            .set(StatusBarLevel::Danger, "Couldnt open downloaded file");
                         return Task::none();
                     }
                     Ok(decoder) => decoder,
@@ -386,17 +398,17 @@ impl AudioCloud {
             Message::SettingsLoaded(val) => {
                 self.settings = val;
                 self.selected_theme = themes::string_to_theme(&self.settings.clone().theme);
-                self.status_message = "Loaded settings ".to_string();
+                self.status.set(StatusBarLevel::Neutral, "Loaded settings");
                 return Task::perform(
                     request::get_packs_meta(self.settings.server_url.clone()),
                     Message::PacksMetaRecived,
                 );
             }
             Message::PacksMetaRecived(m) => match m {
-                Err(_) => self.status_message = "Failed to get IDs".to_string(),
+                Err(_) => self.status.set(StatusBarLevel::Danger, "Failed to get IDs"),
                 Ok(metas) => {
                     self.pack_meta = metas;
-                    self.status_message = String::from("Recived PackIDs");
+                    self.status.set(StatusBarLevel::Neutral, "Recived PackIDs");
                 }
             },
             Message::SaveSettings => {
@@ -412,7 +424,7 @@ impl AudioCloud {
                 );
             }
             Message::SettingsSaved(_) => {
-                self.status_message = String::from("Settings saved ");
+                self.status.set(StatusBarLevel::Neutral, "Settings saved");
             }
             Message::ToggleFavourite(sample) => {
                 if self.settings.is_favourite(&sample) {
@@ -429,7 +441,39 @@ impl AudioCloud {
             }
             Message::SampleAudioDownloaded(path) => {
                 self.settings.add_dl_entry(&path);
-                self.status_message = "Downloaded sample ".to_string();
+                self.status.set(StatusBarLevel::Succes, "Downloaded sample");
+            }
+            Message::DragSample(path) => {
+                return window::get_latest().and_then(|id| {
+                    let val = path.clone();
+                    window::run_with_handle(id, move |handle| {
+                        window::get_latest();
+                        let rel_str =
+                            String::from("cached/".to_string() + &hash_sample(&path) + ".wav");
+                        let preview_icon =
+                            drag::Image::Raw(include_bytes!("../audio.png").to_vec());
+
+                        let relative_path = Path::new(&rel_str);
+                        let item =
+                            drag::DragItem::Files(vec![
+                                std::fs::canonicalize(relative_path).expect("Couldnt make path")
+                            ]);
+                        let opts = drag::Options::default();
+                        let _ = drag::start_drag(
+                            &handle,
+                            item,
+                            preview_icon,
+                            |result: drag::DragResult, cursor_pos: drag::CursorPosition| {
+                                println!(
+                                    "--> Drop Result: [{:?}], Cursor Pos:[{:?}]",
+                                    result, cursor_pos
+                                );
+                            },
+                            opts,
+                        );
+                        Message::DragPerformed
+                    })
+                });
             }
             Message::CopySample(path) => {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -441,9 +485,11 @@ impl AudioCloud {
                     absolute_path.push(relative_path);
                     let abs_str: String = absolute_path.to_str().unwrap().to_string();
                     let filepath = vec![abs_str];
+
                     let ctx = ClipboardContext::new().expect("Couldnt init clipboard");
                     ctx.set_files(filepath).expect("couldnt set to clipboard");
-                    self.status_message = String::from("Copied sample");
+                    self.status.set(StatusBarLevel::Succes, "Copied sample");
+
                     return Task::none();
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -482,7 +528,8 @@ impl AudioCloud {
                 self.editor.sample = nsample;
                 self.editor.lowpass = None;
                 self.editor.highpass = None;
-                self.status_message = "Loading editor...".to_string();
+                self.status
+                    .set(StatusBarLevel::Neutral, "Loading editor...");
                 self.view = ViewControl::Editor;
 
                 return Task::perform(
